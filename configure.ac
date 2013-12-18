@@ -882,6 +882,31 @@ AM_CONDITIONAL(SUPPORT_EGL_PLATFORM_POWERVR_NULL,
                [test "x$enable_null_egl_platform" = "xyes"])
 
 AC_ARG_ENABLE(
+  [rpi-egl-platform],
+  [AC_HELP_STRING([--enable-rpi-egl-platform=@<:@no/yes@:>@], [Enable support for the Raspberry Pi egl platform @<:@default=no@:>@])],
+  [],
+  enable_rpi_egl_platform=no
+)
+AS_IF([test "x$enable_rpi_egl_platform" = "xyes"],
+      [
+        EGL_PLATFORM_COUNT=$((EGL_PLATFORM_COUNT+1))
+        NEED_EGL=yes
+        EGL_PLATFORMS="$EGL_PLATFORMS rpi"
+
+	AC_CHECK_FILES(
+          [/opt/vc/include/bcm_host.h],
+          [COGL_EXTRA_CFLAGS="$COGL_EXTRA_CFLAGS -I/opt/vc/include/ -I/opt/vc/include/interface/vcos/pthreads -I/opt/vc/include/interface/vmcs_host/linux -DHAVE_LIBBCM_HOST -DUSE_EXTERNAL_LIBBCM_HOST"],
+          [AC_MSG_ERROR([bcm_host.h not found])]
+        )
+
+	COGL_EXTRA_LDFLAGS="$COGL_EXTRA_LDFLAGS -L/opt/vc/lib -lbcm_host -lvcos -lpthread -lvchiq_arm"
+
+        COGL_DEFINES_SYMBOLS="$COGL_DEFINES_SYMBOLS COGL_HAS_EGL_PLATFORM_RPI_SUPPORT"
+      ])
+AM_CONDITIONAL(SUPPORT_EGL_PLATFORM_RPI,
+               [test "x$enable_rpi_egl_platform" = "xyes"])
+
+AC_ARG_ENABLE(
   [gdl-egl-platform],
   [AC_HELP_STRING([--enable-gdl-egl-platform=@<:@no/yes@:>@], [Enable support for the GDL egl platform @<:@default=no@:>@])],
   [],
