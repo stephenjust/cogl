@@ -165,8 +165,6 @@ dispman_add_element () {
   DISPMANX_MODEINFO_T dispman_info;
   VC_RECT_T src_rect;
   VC_RECT_T dst_rect;
-  uint32_t width;
-  uint32_t height;
 
   if (dispman_element != DISPMANX_NO_HANDLE) {
     // Element is already in dispman
@@ -174,7 +172,7 @@ dispman_add_element () {
   }
 
   /* Get display width, height */
-  if (!vc_dispmanx_display_get_info(dispman_display, &dispman_info))
+  if (vc_dispmanx_display_get_info(dispman_display, &dispman_info))
     return FALSE;
 
   /* Create source and destination rectangles */
@@ -183,6 +181,7 @@ dispman_add_element () {
 
   /* Add element to Dispman */
   update = vc_dispmanx_update_start(0);
+  if (update == DISPMANX_NO_HANDLE) return FALSE;
   dispman_element = vc_dispmanx_element_add(update, dispman_display,
 					    0 /* layer */, &dst_rect, 0 /* src */,
 					    &src_rect, DISPMANX_PROTECTION_NONE,
@@ -221,9 +220,6 @@ _cogl_winsys_egl_context_created (CoglDisplay *display,
   CoglDisplayEGL *egl_display = display->winsys;
   CoglDisplayRpi *rpi_display = egl_display->platform;
   const char *error_message;
-  EGLint format;
-  VC_RECT_T src_rect;
-  VC_RECT_T dst_rect;
   DISPMANX_MODEINFO_T dispman_info;
   EGL_DISPMANX_WINDOW_T window;
   EGLint err;
@@ -232,14 +228,6 @@ _cogl_winsys_egl_context_created (CoglDisplay *display,
   if (dispman_display == DISPMANX_NO_HANDLE) {
     printf("Opening dispman display");
     dispman_display = vc_dispmanx_display_open(0 /* LCD */);
-  }
-  if (dispman_update == DISPMANX_NO_HANDLE) {
-    printf("Starting dispman update");
-    dispman_update = vc_dispmanx_update_start(0);
-    if (dispman_update == DISPMANX_NO_HANDLE) {
-      error_message = "Failed to start dispman update";
-      goto fail;
-    }
   }
   if (vc_dispmanx_display_get_info(dispman_display, &dispman_info)) {
     error_message = "Unable to get display info";
@@ -250,30 +238,14 @@ _cogl_winsys_egl_context_created (CoglDisplay *display,
   rpi_display->egl_surface_height = dispman_info.height;
   printf("Display is %i x %i\n", dispman_info.width, dispman_info.height);
 
-
-  // Create native window
-  vc_dispmanx_rect_set(&dst_rect, 0, 0,
-		       rpi_display->egl_surface_width,
-		       rpi_display->egl_surface_height);
-  vc_dispmanx_rect_set(&src_rect, 0, 0,
-		       rpi_display->egl_surface_width << 16,
-		       rpi_display->egl_surface_height << 16);
-  if (dispman_element == DISPMANX_NO_HANDLE) {
-    printf("Creating new dispman element\n");
-    dispman_element = vc_dispmanx_element_add(dispman_update, dispman_display,
-					      0 /* layer */, &dst_rect, 0 /* src */,
-					      &src_rect, DISPMANX_PROTECTION_NONE,
-					      0 /* alpha */, 0 /* clamp */, 0 /* transform */);
-  } else {
-    printf("Not creating dispman element\n");
+  if (!dispman_add_element()) {
+    error_message = "Failed to add element to dispman";
+    goto fail;
   }
 
   window.element = dispman_element;
   window.width = dispman_info.width;
   window.height = dispman_info.height;
-
-  printf("Start dispman update\n");
-  vc_dispmanx_update_submit_sync(dispman_update);
 
   // Check EGLConfig
   if (egl_display->egl_config == NULL) {
