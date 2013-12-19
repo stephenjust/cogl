@@ -53,29 +53,25 @@ static DISPMANX_ELEMENT_HANDLE_T dispman_element = DISPMANX_NO_HANDLE;
 static DISPMANX_DISPLAY_HANDLE_T dispman_display = DISPMANX_NO_HANDLE;
 static DISPMANX_UPDATE_HANDLE_T dispman_update = DISPMANX_NO_HANDLE;
 
-void
-cogl_rpi_set_native_window (EGL_DISPMANX_WINDOW_T *window)
-{
-  _cogl_init ();
-
-  native_window = window;
-}
-
+/**
+ * Deallocate EGL renderer struct
+ */
 static void
 _cogl_winsys_renderer_disconnect (CoglRenderer *renderer)
 {
   CoglRendererEGL *egl_renderer = renderer->winsys;
 
   eglTerminate (egl_renderer->edpy);
-  bcm_host_deinit();
   g_slice_free (CoglRendererEGL, egl_renderer);
 }
 
+/**
+ * Allocate and initialize EGL renderer struct
+ */
 static CoglBool
 _cogl_winsys_renderer_connect (CoglRenderer *renderer,
                                CoglError **error)
 {
-  printf("Rpi: _cogl_winsys_renderer_connect()\n");
   bcm_host_init();
   CoglRendererEGL *egl_renderer;
 
@@ -91,7 +87,9 @@ _cogl_winsys_renderer_connect (CoglRenderer *renderer,
     goto error;
   }
 
-  if (!eglInitialize (egl_renderer->edpy, NULL, NULL))
+  if (!eglInitialize (egl_renderer->edpy, 
+		      &egl_renderer->egl_version_major,
+		      &egl_renderer->egl_version_minor))
     {
       _cogl_set_error (error, COGL_WINSYS_ERROR,
                    COGL_WINSYS_ERROR_INIT,
@@ -128,6 +126,14 @@ _cogl_winsys_egl_add_config_attributes (CoglDisplay *display,
   attb[i++] = EGL_WINDOW_BIT;
   attb[i++] = EGL_NONE;
   return i;
+}
+
+void
+cogl_rpi_set_native_window (EGL_DISPMANX_WINDOW_T *window)
+{
+  _cogl_init ();
+
+  native_window = window;
 }
 
 static CoglBool
