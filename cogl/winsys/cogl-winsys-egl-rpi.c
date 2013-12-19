@@ -48,8 +48,9 @@ typedef struct _CoglDisplayRpi
   CoglBool have_onscreen;
 } CoglDisplayRpi;
 
-static EGL_DISPMANX_WINDOW_T *native_window;
 static DISPMANX_ELEMENT_HANDLE_T dispman_element = DISPMANX_NO_HANDLE;
+
+static EGL_DISPMANX_WINDOW_T *native_window;
 static DISPMANX_DISPLAY_HANDLE_T dispman_display = DISPMANX_NO_HANDLE;
 static DISPMANX_UPDATE_HANDLE_T dispman_update = DISPMANX_NO_HANDLE;
 
@@ -135,7 +136,6 @@ static int
 _cogl_winsys_egl_add_config_attributes (CoglDisplay *display,
 					CoglFramebufferConfig *config,
 					EGLint *attb) {
-  printf("Rpi: _cogl_winsys_egl_add_config_attributes()\n");
   int i = 0;
   attb[i++] = EGL_RED_SIZE;
   attb[i++] = 8;
@@ -153,6 +153,54 @@ _cogl_winsys_egl_add_config_attributes (CoglDisplay *display,
   attb[i++] = EGL_WINDOW_BIT;
   attb[i++] = EGL_NONE;
   return i;
+}
+
+/**
+ * Add element to Dispman
+ * Return TRUE on success
+ */
+static CoglBool
+dispman_add_element () {
+  DISPMANX_UPDATE_HANDLE_T update;
+  DISPMANX_MODEINFO_T dispman_info;
+  VC_RECT_T src_rect;
+  VC_RECT_T dst_rect;
+  uint32_t width;
+  uint32_t height;
+
+  if (dispman_element != DISPMANX_NO_HANDLE) {
+    // Element is already in dispman
+    return TRUE;
+  }
+
+  /* Get display width, height */
+  if (!vc_dispmanx_display_get_info(dispman_display, &dispman_info))
+    return FALSE;
+
+  /* Create source and destination rectangles */
+  vc_dispmanx_rect_set(&dst_rect, 0, 0, dispman_info.width, dispman_info.height);
+  vc_dispmanx_rect_set(&src_rect, 0, 0, dispman_info.width << 16, dispman_info.height << 16);
+
+  /* Add element to Dispman */
+  update = vc_dispmanx_update_start(0);
+  dispman_element = vc_dispmanx_element_add(update, dispman_display,
+					    0 /* layer */, &dst_rect, 0 /* src */,
+					    &src_rect, DISPMANX_PROTECTION_NONE,
+					    0 /* alpha */, 0 /* clamp */, 0 /* transform */);
+  vc_dispmanx_update_submit_sync(update);
+  return TRUE;
+}
+
+/**
+ * Remove element from Dispman
+ */
+static void dispman_remove_element () {
+  DISPMANX_UPDATE_HANDLE_T update;
+
+  update = vc_dispmanx_update_start(0);
+  vc_dispmanx_element_remove(update, dispman_element);
+  vc_dispmanx_update_submit_sync(update);
+  dispman_element = DISPMANX_NO_HANDLE;
 }
 
 void
@@ -376,7 +424,7 @@ _cogl_winsys_egl_rpi_get_vtable (void)
 
       vtable.renderer_connect = _cogl_winsys_renderer_connect;
       vtable.renderer_disconnect = _cogl_winsys_renderer_disconnect;
-      vtable.onscreen_bind = _cogl_winsys_onscreen_bind;
+      //      vtable.onscreen_bind = _cogl_winsys_onscreen_bind;
 
       vtable_inited = TRUE;
     }
