@@ -156,13 +156,34 @@ _cogl_winsys_egl_add_config_attributes (CoglDisplay *display,
 }
 
 /**
+ * Get the current screen resolution
+ */
+static void
+dispman_dimensions(uint32_t *width, uint32_t *height) {
+  DISPMANX_MODEINFO_T dispman_info;
+
+  if (dispman_display == DISPMANX_NO_HANDLE ||
+      vc_dispmanx_display_get_info(dispman_display, &dispman_info))
+    {
+      // Error occurred
+      *width = 0;
+      *height = 0;
+      return;
+    }
+
+  *width = dispman_info.width;
+  *height = dispman_info.height;
+}
+
+/**
  * Add element to Dispman
  * Return TRUE on success
  */
 static CoglBool
 dispman_add_element () {
   DISPMANX_UPDATE_HANDLE_T update;
-  DISPMANX_MODEINFO_T dispman_info;
+  uint32_t width;
+  uint32_t height;
   VC_RECT_T src_rect;
   VC_RECT_T dst_rect;
 
@@ -171,13 +192,11 @@ dispman_add_element () {
     return TRUE;
   }
 
-  /* Get display width, height */
-  if (vc_dispmanx_display_get_info(dispman_display, &dispman_info))
-    return FALSE;
+  dispman_dimensions(&width, &height);
 
   /* Create source and destination rectangles */
-  vc_dispmanx_rect_set(&dst_rect, 0, 0, dispman_info.width, dispman_info.height);
-  vc_dispmanx_rect_set(&src_rect, 0, 0, dispman_info.width << 16, dispman_info.height << 16);
+  vc_dispmanx_rect_set(&dst_rect, 0, 0, width, height);
+  vc_dispmanx_rect_set(&src_rect, 0, 0, width << 16, height << 16);
 
   /* Add element to Dispman */
   update = vc_dispmanx_update_start(0);
@@ -195,6 +214,8 @@ dispman_add_element () {
  */
 static void dispman_remove_element () {
   DISPMANX_UPDATE_HANDLE_T update;
+
+  if (dispman_element == DISPMANX_NO_HANDLE) return;
 
   update = vc_dispmanx_update_start(0);
   vc_dispmanx_element_remove(update, dispman_element);
@@ -214,29 +235,19 @@ static CoglBool
 _cogl_winsys_egl_context_created (CoglDisplay *display,
                                   CoglError **error)
 {
-  printf("Rpi: _cogl_winsys_egl_context_created()\n");
   CoglRenderer *renderer = display->renderer;
   CoglRendererEGL *egl_renderer = renderer->winsys;
   CoglDisplayEGL *egl_display = display->winsys;
   CoglDisplayRpi *rpi_display = egl_display->platform;
   const char *error_message;
-  DISPMANX_MODEINFO_T dispman_info;
   EGL_DISPMANX_WINDOW_T window;
   EGLint err;
 
   // Open screen
   if (dispman_display == DISPMANX_NO_HANDLE) {
-    printf("Opening dispman display");
+    printf("Opening dispman display\n");
     dispman_display = vc_dispmanx_display_open(0 /* LCD */);
   }
-  if (vc_dispmanx_display_get_info(dispman_display, &dispman_info)) {
-    error_message = "Unable to get display info";
-    goto fail;
-  }
-
-  rpi_display->egl_surface_width = dispman_info.width;
-  rpi_display->egl_surface_height = dispman_info.height;
-  printf("Display is %i x %i\n", dispman_info.width, dispman_info.height);
 
   if (!dispman_add_element()) {
     error_message = "Failed to add element to dispman";
@@ -244,8 +255,11 @@ _cogl_winsys_egl_context_created (CoglDisplay *display,
   }
 
   window.element = dispman_element;
-  window.width = dispman_info.width;
-  window.height = dispman_info.height;
+  dispman_dimensions((uint32_t *) &window.width, (uint32_t*) &window.height);
+
+  rpi_display->egl_surface_width = window.width;
+  rpi_display->egl_surface_height = window.height;
+  printf("Display is %i x %i\n", window.width, window.height);
 
   // Check EGLConfig
   if (egl_display->egl_config == NULL) {
