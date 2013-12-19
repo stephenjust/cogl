@@ -508,6 +508,11 @@ cogl_sources_c += \
 	$(srcdir)/winsys/cogl-winsys-egl-null.c \
 	$(srcdir)/winsys/cogl-winsys-egl-null-private.h
 endif
+if SUPPORT_EGL_PLATFORM_RPI
+cogl_sources_c += \
+	$(srcdir)/winsys/cogl-winsys-egl-rpi.c \
+	$(srcdir)/winsys/cogl-winsys-egl-rpi-private.h
+endif
 if SUPPORT_EGL_PLATFORM_GDL
 cogl_sources_c += \
 	$(srcdir)/winsys/cogl-winsys-egl-gdl.c \
