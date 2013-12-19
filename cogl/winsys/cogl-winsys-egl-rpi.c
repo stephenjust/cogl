@@ -104,6 +104,33 @@ error:
   return FALSE;
 }
 
+/**
+ * Allocate memory for the Rpi display struct
+ */
+static CoglBool
+_cogl_winsys_egl_display_setup (CoglDisplay *display,
+                                CoglError **error)
+{
+  CoglDisplayEGL *egl_display = display->winsys;
+  CoglDisplayRpi *rpi_display;
+
+  rpi_display = g_slice_new0 (CoglDisplayRpi);
+  egl_display->platform = rpi_display;
+
+  return TRUE;
+}
+
+/**
+ * Deallocate display struct
+ */
+static void
+_cogl_winsys_egl_display_destroy (CoglDisplay *display)
+{
+  CoglDisplayEGL *egl_display = display->winsys;
+
+  g_slice_free (CoglDisplayRpi, egl_display->platform);
+}
+
 static int
 _cogl_winsys_egl_add_config_attributes (CoglDisplay *display,
 					CoglFramebufferConfig *config,
@@ -273,29 +300,6 @@ cleanup_context(CoglDisplay *display) {
   if (dispman_element != DISPMANX_NO_HANDLE)
     vc_dispmanx_element_remove(dispman_update, dispman_element);
   vc_dispmanx_display_close(0 /* LCD */);
-}
-
-static CoglBool
-_cogl_winsys_egl_display_setup (CoglDisplay *display,
-                                CoglError **error)
-{
-  printf("Rpi: _cogl_winsys_egl_display_setup()\n");
-  CoglDisplayEGL *egl_display = display->winsys;
-  CoglDisplayRpi *rpi_display;
-
-  rpi_display = g_slice_new0 (CoglDisplayRpi);
-  egl_display->platform = rpi_display;
-
-  return TRUE;
-}
-
-static void
-_cogl_winsys_egl_display_destroy (CoglDisplay *display)
-{
-  printf("Rpi: _cogl_winsys_egl_display_destroy()\n");
-  CoglDisplayEGL *egl_display = display->winsys;
-
-  g_slice_free (CoglDisplayRpi, egl_display->platform);
 }
 
 static CoglBool
