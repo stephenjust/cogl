@@ -63,6 +63,9 @@
 #ifdef COGL_HAS_EGL_PLATFORM_POWERVR_NULL_SUPPORT
 #include "cogl-winsys-egl-null-private.h"
 #endif
+#ifdef COGL_HAS_EGL_PLATFORM_RPI_SUPPORT
+#include "cogl-winsys-egl-rpi-private.h"
+#endif
 #ifdef COGL_HAS_GLX_SUPPORT
 #include "cogl-winsys-glx-private.h"
 #endif
@@ -209,6 +212,9 @@ static CoglWinsysVtableGetter _cogl_winsys_vtable_getters[] =
 #endif
 #ifdef COGL_HAS_EGL_PLATFORM_POWERVR_NULL_SUPPORT
   _cogl_winsys_egl_null_get_vtable,
+#endif
+#ifdef COGL_HAS_EGL_PLATFORM_RPI_SUPPORT
+  _cogl_winsys_egl_rpi_get_vtable,
 #endif
 #ifdef COGL_HAS_WGL_SUPPORT
   _cogl_winsys_wgl_get_vtable,
