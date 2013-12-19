@@ -233,6 +233,10 @@ egl_attributes_from_framebuffer_config (CoglDisplay *display,
                                                               config,
                                                               attributes);
 
+  /* If the platform terminated the attribute list, don't add anything */
+  if (i > 0 && attributes[i - 1] == EGL_NONE)
+    return;
+
   if (config->need_stencil)
     {
       attributes[i++] = EGL_STENCIL_SIZE;
