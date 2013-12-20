@@ -49,8 +49,9 @@ typedef struct _CoglDisplayRpi
 } CoglDisplayRpi;
 
 static DISPMANX_ELEMENT_HANDLE_T dispman_element = DISPMANX_NO_HANDLE;
+static EGL_DISPMANX_WINDOW_T native_window;
+static CoglBool native_window_init = FALSE;
 
-static EGL_DISPMANX_WINDOW_T *native_window;
 static DISPMANX_DISPLAY_HANDLE_T dispman_display = DISPMANX_NO_HANDLE;
 static DISPMANX_UPDATE_HANDLE_T dispman_update = DISPMANX_NO_HANDLE;
 
@@ -223,14 +224,6 @@ static void dispman_remove_element () {
   dispman_element = DISPMANX_NO_HANDLE;
 }
 
-void
-cogl_rpi_set_native_window (EGL_DISPMANX_WINDOW_T *window)
-{
-  _cogl_init ();
-
-  native_window = window;
-}
-
 static CoglBool
 _cogl_winsys_egl_context_created (CoglDisplay *display,
                                   CoglError **error)
@@ -240,26 +233,27 @@ _cogl_winsys_egl_context_created (CoglDisplay *display,
   CoglDisplayEGL *egl_display = display->winsys;
   CoglDisplayRpi *rpi_display = egl_display->platform;
   const char *error_message;
-  EGL_DISPMANX_WINDOW_T window;
   EGLint err;
 
   // Open screen
   if (dispman_display == DISPMANX_NO_HANDLE) {
-    printf("Opening dispman display\n");
     dispman_display = vc_dispmanx_display_open(0 /* LCD */);
   }
 
-  if (!dispman_add_element()) {
-    error_message = "Failed to add element to dispman";
-    goto fail;
+  if (!native_window_init) {
+    if (!dispman_add_element()) {
+      error_message = "Failed to add element to dispman";
+      goto fail;
+    }
+
+    native_window.element = dispman_element;
+    dispman_dimensions((uint32_t *) &native_window.width, (uint32_t *) &native_window.height);
+
+    native_window_init = TRUE;
   }
 
-  window.element = dispman_element;
-  dispman_dimensions((uint32_t *) &window.width, (uint32_t*) &window.height);
-
-  rpi_display->egl_surface_width = window.width;
-  rpi_display->egl_surface_height = window.height;
-  printf("Display is %i x %i\n", window.width, window.height);
+  rpi_display->egl_surface_width = native_window.width;
+  rpi_display->egl_surface_height = native_window.height;
 
   // Check EGLConfig
   if (egl_display->egl_config == NULL) {
@@ -275,7 +269,7 @@ _cogl_winsys_egl_context_created (CoglDisplay *display,
   egl_display->egl_surface =
     eglCreateWindowSurface (egl_renderer->edpy,
                             egl_display->egl_config,
-                            &window,
+                            &native_window,
                             NULL);
   err = eglGetError();
   if (err == EGL_BAD_DISPLAY) {
@@ -314,12 +308,6 @@ _cogl_winsys_egl_context_created (CoglDisplay *display,
       goto fail;
     }
 
-  // Clear screen
-  printf("Clear screen\n");
-  glClearColor(0.15f, 0.25f, 0.35f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT);
-  printf("End clear screen\n");
-
   return TRUE;
 
  fail:
@@ -334,6 +322,7 @@ cleanup_context(CoglDisplay *display) {
   if (dispman_element != DISPMANX_NO_HANDLE)
     vc_dispmanx_element_remove(dispman_update, dispman_element);
   vc_dispmanx_display_close(0 /* LCD */);
+  native_window_init = FALSE;
 }
 
 static CoglBool
