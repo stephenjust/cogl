@@ -16,7 +16,17 @@ sudo make install
 
 The system cogl libraries are installed in /usr/lib/arm-linux-gnuabihf. You may need to move these elsewhere for GCC to find your libraries.
 
-Note that the cogl build will fail at building tests-conformance. These are not being built with the -lGLESv2 flag so they cannot find some methods. The Broadcom libraries move some libraries between libEGL and libGLESv2 in their implementation.
+Note that the cogl build will fail at building tests-conformance. These are not being built with the -lGLESv2 flag so they cannot find some methods. The Broadcom libraries move some methods between libEGL and libGLESv2 in their implementation.
+
+Using Cogl
+----------
+
+In order to let cogl use this Raspberry Pi backend, you must set some environment variables:
+
+```
+export COGL_RENDERER=egl_rpi
+export COGL_DRIVER=gles2
+```
 
 Using Clutter
 -------------
@@ -35,6 +45,12 @@ Build clutter 1.14 with the following:
 ./autogen.sh --prefix=/usr --enable-x11-backend=yes --enable-egl-backend=yes --enable-evdev-input=yes --enable-docs=no
 make
 sudo make install
+```
+
+To run clutter applications, you must set the clutter backend:
+
+```
+export CLUTTER_BACKEND=eglnative
 ```
 
 You can use this combination of clutter and cogl to use the sample programs located at https://github.com/clutter-project/toys. These demo programs appear to run relatively smoothly at 1920x1080. There is likely more room for optimization within cogl to speed things up.
