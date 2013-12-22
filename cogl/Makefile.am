@@ -665,6 +665,9 @@ Cogl_1_0_gir_LIBS = libcogl.la
 if UNIT_TESTS
 Cogl_1_0_gir_LIBS += $(top_builddir)/test-fixtures/libtest-fixtures.la
 endif
+if SUPPORT_EGL_PLATFORM_RPI
+Cogl_1_0_gir_LIBS += GLESv2
+endif
 Cogl_1_0_gir_FILES = $(cogl_1_public_h) cogl-enum-types.h
 Cogl_1_0_gir_CFLAGS = $(AM_CPPFLAGS) $(COGL_DEP_CFLAGS) -UCOGL_ENABLE_EXPERIMENTAL_API -UCOGL_ENABLE_EXPERIMENTAL_2_0_API -UCOGL_COMPILATION -D__COGL_H_INSIDE__ -D__COGL_XLIB_H_INSIDE__ -DCOGL_GIR_SCANNING
 Cogl_1_0_gir_INCLUDES = GL-1.0 GObject-2.0
