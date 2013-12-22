@@ -1038,6 +1038,7 @@ AS_IF([test "x$enable_rpi_egl_platform" = "xyes"],
           [AC_MSG_ERROR([bcm_host.h not found])]
         )
 
+	COGL_PKG_REQUIRES="$COGL_PKG_REQUIRES glesv2"
 	COGL_EXTRA_LDFLAGS="$COGL_EXTRA_LDFLAGS -L/opt/vc/lib -lbcm_host -lvcos -lpthread -lvchiq_arm"
 
         COGL_DEFINES_SYMBOLS="$COGL_DEFINES_SYMBOLS COGL_HAS_EGL_PLATFORM_RPI_SUPPORT"
