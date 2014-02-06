@@ -75,25 +75,6 @@ _cogl_texture_2d_free (CoglTexture2D *tex_2d)
   _cogl_texture_free (COGL_TEXTURE (tex_2d));
 }
 
-static CoglBool
-_cogl_texture_2d_can_create (CoglContext *ctx,
-                             unsigned int width,
-                             unsigned int height,
-                             CoglPixelFormat internal_format)
-{
-  /* If NPOT textures aren't supported then the size must be a power
-     of two */
-  if (!cogl_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_NPOT_BASIC) &&
-      (!_cogl_util_is_pot (width) ||
-       !_cogl_util_is_pot (height)))
-    return FALSE;
-
-  return ctx->driver_vtable->texture_2d_can_create (ctx,
-                                                    width,
-                                                    height,
-                                                    internal_format);
-}
-
 void
 _cogl_texture_2d_set_auto_mipmap (CoglTexture *tex,
                                   CoglBool value)
@@ -107,19 +88,19 @@ CoglTexture2D *
 _cogl_texture_2d_create_base (CoglContext *ctx,
                               int width,
                               int height,
-                              CoglPixelFormat internal_format)
+                              CoglPixelFormat internal_format,
+                              CoglTextureLoader *loader)
 {
   CoglTexture2D *tex_2d = g_new (CoglTexture2D, 1);
   CoglTexture *tex = COGL_TEXTURE (tex_2d);
 
-  _cogl_texture_init (tex, ctx, width, height, &cogl_texture_2d_vtable);
+  _cogl_texture_init (tex, ctx, width, height, internal_format, loader,
+                      &cogl_texture_2d_vtable);
 
   tex_2d->mipmaps_dirty = TRUE;
   tex_2d->auto_mipmap = TRUE;
 
   tex_2d->is_foreign = FALSE;
-
-  tex_2d->internal_format = internal_format;
 
   ctx->driver_vtable->texture_2d_init (tex_2d);
 
@@ -129,16 +110,17 @@ _cogl_texture_2d_create_base (CoglContext *ctx,
 CoglTexture2D *
 cogl_texture_2d_new_with_size (CoglContext *ctx,
                                int width,
-                               int height,
-                               CoglPixelFormat internal_format)
+                               int height)
 {
-  /* Since no data, we need some internal format */
-  if (internal_format == COGL_PIXEL_FORMAT_ANY)
-    internal_format = COGL_PIXEL_FORMAT_RGBA_8888_PRE;
+  CoglTextureLoader *loader;
 
-  return  _cogl_texture_2d_create_base (ctx,
-                                        width, height,
-                                        internal_format);
+  loader = _cogl_texture_create_loader ();
+  loader->src_type = COGL_TEXTURE_SOURCE_TYPE_SIZED;
+  loader->src.sized.width = width;
+  loader->src.sized.height = height;
+
+  return _cogl_texture_2d_create_base (ctx, width, height,
+                                       COGL_PIXEL_FORMAT_RGBA_8888_PRE, loader);
 }
 
 static CoglBool
@@ -146,55 +128,40 @@ _cogl_texture_2d_allocate (CoglTexture *tex,
                            CoglError **error)
 {
   CoglContext *ctx = tex->context;
+
   return ctx->driver_vtable->texture_2d_allocate (tex, error);
 }
 
 CoglTexture2D *
 _cogl_texture_2d_new_from_bitmap (CoglBitmap *bmp,
-                                  CoglPixelFormat internal_format,
-                                  CoglBool can_convert_in_place,
-                                  CoglError **error)
+                                  CoglBool can_convert_in_place)
 {
-  CoglContext *ctx;
+  CoglTextureLoader *loader;
 
   _COGL_RETURN_VAL_IF_FAIL (bmp != NULL, NULL);
 
-  ctx = _cogl_bitmap_get_context (bmp);
+  loader = _cogl_texture_create_loader ();
+  loader->src_type = COGL_TEXTURE_SOURCE_TYPE_BITMAP;
+  loader->src.bitmap.bitmap = cogl_object_ref (bmp);
+  loader->src.bitmap.can_convert_in_place = can_convert_in_place;
 
-  internal_format =
-    _cogl_texture_determine_internal_format (cogl_bitmap_get_format (bmp),
-                                             internal_format);
-
-  if (!_cogl_texture_2d_can_create (ctx,
-                                    cogl_bitmap_get_width (bmp),
-                                    cogl_bitmap_get_height (bmp),
-                                    internal_format))
-    {
-      _cogl_set_error (error, COGL_TEXTURE_ERROR,
-                       COGL_TEXTURE_ERROR_SIZE,
-                       "Failed to create texture 2d due to size/format"
-                       " constraints");
-      return NULL;
-    }
-
-  return ctx->driver_vtable->texture_2d_new_from_bitmap (bmp,
-                                                         internal_format,
-                                                         can_convert_in_place,
-                                                         error);
+  return  _cogl_texture_2d_create_base (_cogl_bitmap_get_context (bmp),
+                                        cogl_bitmap_get_width (bmp),
+                                        cogl_bitmap_get_height (bmp),
+                                        cogl_bitmap_get_format (bmp),
+                                        loader);
 }
 
 CoglTexture2D *
-cogl_texture_2d_new_from_bitmap (CoglBitmap *bmp,
-                                 CoglPixelFormat internal_format,
-                                 CoglError **error)
+cogl_texture_2d_new_from_bitmap (CoglBitmap *bmp)
 {
-  return _cogl_texture_2d_new_from_bitmap (bmp, internal_format, FALSE, error);
+  return _cogl_texture_2d_new_from_bitmap (bmp,
+                                           FALSE); /* can't convert in place */
 }
 
 CoglTexture2D *
 cogl_texture_2d_new_from_file (CoglContext *ctx,
                                const char *filename,
-                               CoglPixelFormat internal_format,
                                CoglError **error)
 {
   CoglBitmap *bmp;
@@ -207,9 +174,7 @@ cogl_texture_2d_new_from_file (CoglContext *ctx,
     return NULL;
 
   tex_2d = _cogl_texture_2d_new_from_bitmap (bmp,
-                                             internal_format,
-                                             TRUE, /* can convert in-place */
-                                             error);
+                                             TRUE); /* can convert in-place */
 
   cogl_object_unref (bmp);
 
@@ -221,7 +186,6 @@ cogl_texture_2d_new_from_data (CoglContext *ctx,
                                int width,
                                int height,
                                CoglPixelFormat format,
-                               CoglPixelFormat internal_format,
                                int rowstride,
                                const uint8_t *data,
                                CoglError **error)
@@ -243,11 +207,16 @@ cogl_texture_2d_new_from_data (CoglContext *ctx,
                                   rowstride,
                                   (uint8_t *) data);
 
-  tex_2d = cogl_texture_2d_new_from_bitmap (bmp,
-                                            internal_format,
-                                            error);
+  tex_2d = cogl_texture_2d_new_from_bitmap (bmp);
 
   cogl_object_unref (bmp);
+
+  if (tex_2d &&
+      !cogl_texture_allocate (COGL_TEXTURE (tex_2d), error))
+    {
+      cogl_object_unref (tex_2d);
+      return NULL;
+    }
 
   return tex_2d;
 }
@@ -264,6 +233,8 @@ _cogl_egl_texture_2d_new_from_image (CoglContext *ctx,
                                      EGLImageKHR image,
                                      CoglError **error)
 {
+  CoglTextureLoader *loader;
+
   _COGL_RETURN_VAL_IF_FAIL (_cogl_context_get_winsys (ctx)->constraints &
                             COGL_RENDERER_CONSTRAINT_USES_EGL,
                             NULL);
@@ -273,22 +244,14 @@ _cogl_egl_texture_2d_new_from_image (CoglContext *ctx,
                              COGL_PRIVATE_FEATURE_TEXTURE_2D_FROM_EGL_IMAGE),
                             NULL);
 
-  if (ctx->driver_vtable->egl_texture_2d_new_from_image)
-    return ctx->driver_vtable->egl_texture_2d_new_from_image (ctx,
-                                                              width,
-                                                              height,
-                                                              format,
-                                                              image,
-                                                              error);
-  else
-    {
-      _cogl_set_error (error,
-                       COGL_SYSTEM_ERROR,
-                       COGL_SYSTEM_ERROR_UNSUPPORTED,
-                       "Creating 2D textures from EGL images is not "
-                       "supported by the current driver");
-      return NULL;
-    }
+  loader = _cogl_texture_create_loader ();
+  loader->src_type = COGL_TEXTURE_SOURCE_TYPE_EGL_IMAGE;
+  loader->src.egl_image.image = image;
+  loader->src.egl_image.width = width;
+  loader->src.egl_image.height = height;
+  loader->src.egl_image.format = format;
+
+  return _cogl_texture_2d_create_base (ctx, width, height, format, loader);
 }
 #endif /* defined (COGL_HAS_EGL_SUPPORT) && defined (EGL_KHR_image_base) */
 
@@ -296,10 +259,10 @@ _cogl_egl_texture_2d_new_from_image (CoglContext *ctx,
 static void
 shm_buffer_get_cogl_pixel_format (struct wl_shm_buffer *shm_buffer,
                                   CoglPixelFormat *format_out,
-                                  CoglPixelFormat *internal_format_out)
+                                  CoglTextureComponents *components_out)
 {
   CoglPixelFormat format;
-  CoglPixelFormat internal_format = COGL_PIXEL_FORMAT_ANY;
+  CoglTextureComponents components = COGL_TEXTURE_COMPONENTS_RGBA;
 
   switch (wl_shm_buffer_get_format (shm_buffer))
     {
@@ -309,7 +272,7 @@ shm_buffer_get_cogl_pixel_format (struct wl_shm_buffer *shm_buffer,
       break;
     case WL_SHM_FORMAT_XRGB8888:
       format = COGL_PIXEL_FORMAT_ARGB_8888;
-      internal_format = COGL_PIXEL_FORMAT_RGB_888;
+      components = COGL_TEXTURE_COMPONENTS_RGB;
       break;
 #elif G_BYTE_ORDER == G_LITTLE_ENDIAN
     case WL_SHM_FORMAT_ARGB8888:
@@ -317,7 +280,7 @@ shm_buffer_get_cogl_pixel_format (struct wl_shm_buffer *shm_buffer,
       break;
     case WL_SHM_FORMAT_XRGB8888:
       format = COGL_PIXEL_FORMAT_BGRA_8888;
-      internal_format = COGL_PIXEL_FORMAT_BGR_888;
+      components = COGL_TEXTURE_COMPONENTS_RGB;
       break;
 #endif
     default:
@@ -327,8 +290,8 @@ shm_buffer_get_cogl_pixel_format (struct wl_shm_buffer *shm_buffer,
 
   if (format_out)
     *format_out = format;
-  if (internal_format_out)
-    *internal_format_out = internal_format;
+  if (components_out)
+    *components_out = components;
 }
 
 CoglBool
@@ -368,6 +331,7 @@ cogl_wayland_texture_2d_new_from_buffer (CoglContext *ctx,
                                          CoglError **error)
 {
   struct wl_shm_buffer *shm_buffer;
+  CoglTexture2D *tex = NULL;
 
   shm_buffer = wl_shm_buffer_get (buffer);
 
@@ -376,17 +340,31 @@ cogl_wayland_texture_2d_new_from_buffer (CoglContext *ctx,
       int stride = wl_shm_buffer_get_stride (shm_buffer);
       int width = wl_shm_buffer_get_width (shm_buffer);
       int height = wl_shm_buffer_get_height (shm_buffer);
-      CoglPixelFormat format, internal_format;
+      CoglPixelFormat format;
+      CoglTextureComponents components;
+      CoglBitmap *bmp;
 
-      shm_buffer_get_cogl_pixel_format (shm_buffer, &format, &internal_format);
+      shm_buffer_get_cogl_pixel_format (shm_buffer, &format, &components);
 
-      return cogl_texture_2d_new_from_data (ctx,
-                                            width, height,
-                                            format,
-                                            internal_format,
-                                            stride,
-                                            wl_shm_buffer_get_data (shm_buffer),
-                                            error);
+      bmp = cogl_bitmap_new_for_data (ctx,
+                                      width, height,
+                                      format,
+                                      stride,
+                                      wl_shm_buffer_get_data (shm_buffer));
+
+      tex = cogl_texture_2d_new_from_bitmap (bmp);
+
+      cogl_texture_set_components (COGL_TEXTURE (tex), components);
+
+      cogl_object_unref (bmp);
+
+      if (!cogl_texture_allocate (COGL_TEXTURE (tex), error))
+        {
+          cogl_object_unref (tex);
+          return NULL;
+        }
+      else
+        return tex;
     }
   else
     {
@@ -406,7 +384,6 @@ cogl_wayland_texture_2d_new_from_buffer (CoglContext *ctx,
                                           &height))
         {
           EGLImageKHR image;
-          CoglTexture2D *tex = NULL;
           CoglPixelFormat internal_format;
 
           _COGL_RETURN_VAL_IF_FAIL (_cogl_context_get_winsys (ctx)->constraints &

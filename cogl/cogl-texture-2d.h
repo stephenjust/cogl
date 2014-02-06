@@ -3,7 +3,7 @@
  *
  * An object oriented GL/GLES Abstraction/Utility Layer
  *
- * Copyright (C) 2011 Intel Corporation.
+ * Copyright (C) 2011,2013 Intel Corporation.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -73,19 +73,20 @@ cogl_is_texture_2d (void *object);
  * @ctx: A #CoglContext
  * @width: Width of the texture to allocate
  * @height: Height of the texture to allocate
- * @internal_format: The format of the texture
  *
- * Allocates a low-level #CoglTexture2D texture that your GPU can
- * texture from directly. This is unlike sliced textures for example
- * which may be comprised of multiple internal textures, or atlas
- * textures where Cogl has to modify texture coordinates before they
- * may be used by the GPU.
+ * Creates a low-level #CoglTexture2D texture with a given @width and
+ * @height that your GPU can texture from directly.
  *
  * The storage for the texture is not allocated before this function
  * returns. You can call cogl_texture_allocate() to explicitly
  * allocate the underlying storage or preferably let Cogl
  * automatically allocate storage lazily when it may know more about
  * how the texture is being used and can optimize how it is allocated.
+ *
+ * The texture is still configurable until it has been allocated so
+ * for example you can influence the internal format of the texture
+ * using cogl_texture_set_components() and
+ * cogl_texture_set_premultiplied().
  *
  * <note>Many GPUs only support power of two sizes for #CoglTexture2D
  * textures. You can check support for non power of two textures by
@@ -99,24 +100,31 @@ cogl_is_texture_2d (void *object);
 CoglTexture2D *
 cogl_texture_2d_new_with_size (CoglContext *ctx,
                                int width,
-                               int height,
-                               CoglPixelFormat internal_format);
+                               int height);
 
 /**
  * cogl_texture_2d_new_from_file:
  * @ctx: A #CoglContext
  * @filename: the file to load
- * @internal_format: the #CoglPixelFormat to use for the GPU storage of the
- *    texture. If %COGL_PIXEL_FORMAT_ANY is given then a premultiplied
- *    format similar to the format of the source data will be used. The
- *    default blending equations of Cogl expect premultiplied color data;
- *    the main use of passing a non-premultiplied format here is if you
- *    have non-premultiplied source data and are going to adjust the blend
- *    mode (see cogl_material_set_blend()) or use the data for something
- *    other than straight blending.
  * @error: A #CoglError to catch exceptional errors or %NULL
  *
- * Creates a #CoglTexture2D from an image file.
+ * Creates a low-level #CoglTexture2D texture from an image file.
+ *
+ * The storage for the texture is not allocated before this function
+ * returns. You can call cogl_texture_allocate() to explicitly
+ * allocate the underlying storage or preferably let Cogl
+ * automatically allocate storage lazily when it may know more about
+ * how the texture is being used and can optimize how it is allocated.
+ *
+ * The texture is still configurable until it has been allocated so
+ * for example you can influence the internal format of the texture
+ * using cogl_texture_set_components() and
+ * cogl_texture_set_premultiplied().
+ *
+ * <note>Many GPUs only support power of two sizes for #CoglTexture2D
+ * textures. You can check support for non power of two textures by
+ * checking for the %COGL_FEATURE_ID_TEXTURE_NPOT feature via
+ * cogl_has_feature().</note>
  *
  * Return value: (transfer full): A newly created #CoglTexture2D or %NULL on failure
  *               and @error will be updated.
@@ -126,7 +134,6 @@ cogl_texture_2d_new_with_size (CoglContext *ctx,
 CoglTexture2D *
 cogl_texture_2d_new_from_file (CoglContext *ctx,
                                const char *filename,
-                               CoglPixelFormat internal_format,
                                CoglError **error);
 
 /**
@@ -135,24 +142,25 @@ cogl_texture_2d_new_from_file (CoglContext *ctx,
  * @width: width of texture in pixels
  * @height: height of texture in pixels
  * @format: the #CoglPixelFormat the buffer is stored in in RAM
- * @internal_format: the #CoglPixelFormat that will be used for storing
- *    the buffer on the GPU. If %COGL_PIXEL_FORMAT_ANY is given then a
- *    premultiplied format similar to the format of the source data will
- *    be used. The default blending equations of Cogl expect premultiplied
- *    color data; the main use of passing a non-premultiplied format here
- *    is if you have non-premultiplied source data and are going to adjust
- *    the blend mode (see cogl_pipeline_set_blend()) or use the data for
- *    something other than straight blending.
  * @rowstride: the memory offset in bytes between the starts of
  *    scanlines in @data. A value of 0 will make Cogl automatically
  *    calculate @rowstride from @width and @format.
  * @data: pointer the memory region where the source buffer resides
  * @error: A #CoglError for exceptions
  *
- * Creates a new #CoglTexture2D texture based on data residing in memory.
- * These are unlike sliced textures for example which may be comprised
- * of multiple internal textures, or atlas textures where Cogl has to
- * modify texture coordinates before they may be used by the GPU.
+ * Creates a low-level #CoglTexture2D texture based on data residing
+ * in memory.
+ *
+ * <note>This api will always immediately allocate GPU memory for the
+ * texture and upload the given data so that the @data pointer does
+ * not need to remain valid once this function returns. This means it
+ * is not possible to configure the texture before it is allocated. If
+ * you do need to configure the texture before allocation (to specify
+ * constraints on the internal format for example) then you can
+ * instead create a #CoglBitmap for your data and use
+ * cogl_texture_2d_new_from_bitmap() or use
+ * cogl_texture_2d_new_with_size() and then upload data using
+ * cogl_texture_set_data()</note>
  *
  * <note>Many GPUs only support power of two sizes for #CoglTexture2D
  * textures. You can check support for non power of two textures by
@@ -171,7 +179,6 @@ cogl_texture_2d_new_from_data (CoglContext *ctx,
                                int width,
                                int height,
                                CoglPixelFormat format,
-                               CoglPixelFormat internal_format,
                                int rowstride,
                                const uint8_t *data,
                                CoglError **error);
@@ -179,39 +186,33 @@ cogl_texture_2d_new_from_data (CoglContext *ctx,
 /**
  * cogl_texture_2d_new_from_bitmap:
  * @bitmap: A #CoglBitmap
- * @internal_format: the #CoglPixelFormat that will be used for storing
- *    the buffer on the GPU. If %COGL_PIXEL_FORMAT_ANY is given then a
- *    premultiplied format similar to the format of the source data will
- *    be used. The default blending equations of Cogl expect premultiplied
- *    color data; the main use of passing a non-premultiplied format here
- *    is if you have non-premultiplied source data and are going to adjust
- *    the blend mode (see cogl_pipeline_set_blend()) or use the data for
- *    something other than straight blending.
- * @error: A #CoglError for exceptions
  *
- * Creates a new #CoglTexture2D texture based on data residing in a
- * bitmap. These are unlike sliced textures for example which may be
- * comprised of multiple internal textures, or atlas textures where
- * Cogl has to modify texture coordinates before they may be used by
- * the GPU.
+ * Creates a low-level #CoglTexture2D texture based on data residing
+ * in a #CoglBitmap.
+ *
+ * The storage for the texture is not allocated before this function
+ * returns. You can call cogl_texture_allocate() to explicitly
+ * allocate the underlying storage or preferably let Cogl
+ * automatically allocate storage lazily when it may know more about
+ * how the texture is being used and can optimize how it is allocated.
+ *
+ * The texture is still configurable until it has been allocated so
+ * for example you can influence the internal format of the texture
+ * using cogl_texture_set_components() and
+ * cogl_texture_set_premultiplied().
  *
  * <note>Many GPUs only support power of two sizes for #CoglTexture2D
  * textures. You can check support for non power of two textures by
  * checking for the %COGL_FEATURE_ID_TEXTURE_NPOT feature via
  * cogl_has_feature().</note>
  *
- * Returns: (transfer full): A newly allocated #CoglTexture2D, or if
- *          the size is not supported (because it is too large or a
- *          non-power-of-two size that the hardware doesn't support)
- *          it will return %NULL and set @error.
+ * Returns: (transfer full): A newly allocated #CoglTexture2D
  *
  * Since: 2.0
  * Stability: unstable
  */
 CoglTexture2D *
-cogl_texture_2d_new_from_bitmap (CoglBitmap *bitmap,
-                                 CoglPixelFormat internal_format,
-                                 CoglError **error);
+cogl_texture_2d_new_from_bitmap (CoglBitmap *bitmap);
 
 COGL_END_DECLS
 

@@ -79,12 +79,16 @@
 #include <cogl/deprecated/cogl-fixed.h>
 #include <cogl/deprecated/cogl-material-compat.h>
 #include <cogl/deprecated/cogl-shader.h>
+#include <cogl/deprecated/cogl-texture-deprecated.h>
 #endif
 
 /* It would be good to move these casts up into 1.x only api if we can
  * update Clutter, Mutter and GnomeShell to avoid redundant casts when
  * they enable the experimental api... */
 #include <cogl/deprecated/cogl-type-casts.h>
+
+#include <cogl/deprecated/cogl-framebuffer-deprecated.h>
+#include <cogl/deprecated/cogl-auto-texture.h>
 
 /*
  * 2.0 api that's compatible with the 1.x api...

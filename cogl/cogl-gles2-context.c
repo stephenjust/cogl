@@ -320,8 +320,7 @@ copy_flipped_texture (CoglGLES2Context *gles2_ctx,
                                            tex_id,
                                            tex_object_data->width,
                                            tex_object_data->height,
-                                           internal_format,
-                                           NULL /* error */);
+                                           internal_format);
 
   if (dst_texture)
     {
@@ -1693,6 +1692,8 @@ _cogl_gles2_offscreen_allocate (CoglOffscreen *offscreen,
   const CoglWinsysVtable *winsys;
   CoglError *internal_error = NULL;
   CoglGLES2Offscreen *gles2_offscreen;
+  int level_width;
+  int level_height;
 
   if (!framebuffer->allocated &&
       !cogl_framebuffer_allocate (framebuffer, error))
@@ -1722,11 +1723,18 @@ _cogl_gles2_offscreen_allocate (CoglOffscreen *offscreen,
     }
 
   gles2_offscreen = g_slice_new0 (CoglGLES2Offscreen);
+
+  _cogl_texture_get_level_size (offscreen->texture,
+                                offscreen->texture_level,
+                                &level_width,
+                                &level_height,
+                                NULL);
+
   if (!_cogl_framebuffer_try_creating_gl_fbo (gles2_context->context,
                                               offscreen->texture,
                                               offscreen->texture_level,
-                                              offscreen->texture_level_width,
-                                              offscreen->texture_level_height,
+                                              level_width,
+                                              level_height,
                                               offscreen->depth_texture,
                                               &COGL_FRAMEBUFFER (offscreen)->config,
                                               offscreen->allocation_flags,
@@ -1932,15 +1940,13 @@ cogl_gles2_texture_2d_new_from_handle (CoglContext *ctx,
                                        unsigned int handle,
                                        int width,
                                        int height,
-                                       CoglPixelFormat internal_format,
-                                       CoglError **error)
+                                       CoglPixelFormat format)
 {
-  return cogl_texture_2d_new_from_foreign (ctx,
-                                           handle,
-                                           width,
-                                           height,
-                                           internal_format,
-                                           error);
+  return cogl_texture_2d_gl_new_from_foreign (ctx,
+                                              handle,
+                                              width,
+                                              height,
+                                              format);
 }
 
 CoglBool

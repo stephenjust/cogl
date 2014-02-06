@@ -287,6 +287,7 @@ cogl_texture_pixmap_x11_new (CoglContext *ctxt,
   int pixmap_x, pixmap_y;
   unsigned int pixmap_width, pixmap_height;
   unsigned int pixmap_border_width;
+  CoglPixelFormat internal_format;
   CoglTexture *tex = COGL_TEXTURE (tex_pixmap);
   XWindowAttributes window_attributes;
   int damage_base;
@@ -305,7 +306,15 @@ cogl_texture_pixmap_x11_new (CoglContext *ctxt,
       return NULL;
     }
 
+  /* Note: the detailed pixel layout doesn't matter here, we are just
+   * interested in RGB vs RGBA... */
+  internal_format = (tex_pixmap->depth >= 32
+                     ? COGL_PIXEL_FORMAT_RGBA_8888_PRE
+                     : COGL_PIXEL_FORMAT_RGB_888);
+
   _cogl_texture_init (tex, ctxt, pixmap_width, pixmap_height,
+                      internal_format,
+                      NULL, /* no loader */
                       &cogl_texture_pixmap_x11_vtable);
 
   tex_pixmap->pixmap = pixmap;
@@ -326,6 +335,7 @@ cogl_texture_pixmap_x11_new (CoglContext *ctxt,
                    "Unable to query root window attributes");
       return NULL;
     }
+
   tex_pixmap->visual = window_attributes.visual;
 
   /* If automatic updates are requested and the Xlib connection
@@ -346,9 +356,9 @@ cogl_texture_pixmap_x11_new (CoglContext *ctxt,
 
   /* Assume the entire pixmap is damaged to begin with */
   tex_pixmap->damage_rect.x1 = 0;
-  tex_pixmap->damage_rect.x2 = tex->width;
+  tex_pixmap->damage_rect.x2 = pixmap_width;
   tex_pixmap->damage_rect.y1 = 0;
-  tex_pixmap->damage_rect.y2 = tex->height;
+  tex_pixmap->damage_rect.y2 = pixmap_height;
 
   winsys = _cogl_texture_pixmap_x11_get_winsys (tex_pixmap);
   if (winsys->texture_pixmap_x11_create)
@@ -362,7 +372,8 @@ cogl_texture_pixmap_x11_new (CoglContext *ctxt,
   if (!tex_pixmap->use_winsys_texture)
     tex_pixmap->winsys = NULL;
 
-  _cogl_texture_set_allocated (tex, TRUE);
+  _cogl_texture_set_allocated (tex, internal_format,
+                               pixmap_width, pixmap_height);
 
   return _cogl_texture_pixmap_x11_object_new (tex_pixmap);
 }
@@ -505,8 +516,9 @@ create_fallback_texture (CoglContext *ctx,
     {
       /* First try creating a fast-path non-sliced texture */
       tex = COGL_TEXTURE (cogl_texture_2d_new_with_size (ctx,
-                                                         width, height,
-                                                         internal_format));
+                                                         width, height));
+
+      _cogl_texture_set_internal_format (tex, internal_format);
 
       /* TODO: instead of allocating storage here it would be better
        * if we had some api that let us just check that the size is
@@ -528,9 +540,10 @@ create_fallback_texture (CoglContext *ctx,
         cogl_texture_2d_sliced_new_with_size (ctx,
                                               width,
                                               height,
-                                              COGL_TEXTURE_MAX_WASTE,
-                                              internal_format);
+                                              COGL_TEXTURE_MAX_WASTE);
       tex = COGL_TEXTURE (tex_2ds);
+
+      _cogl_texture_set_internal_format (tex, internal_format);
     }
 
   return tex;
@@ -994,7 +1007,7 @@ _cogl_texture_pixmap_x11_get_format (CoglTexture *tex)
   CoglTexture *child_tex = _cogl_texture_pixmap_x11_get_texture (tex_pixmap);
 
   /* Forward on to the child texture */
-  return cogl_texture_get_format (child_tex);
+  return _cogl_texture_get_format (child_tex);
 }
 
 static GLenum

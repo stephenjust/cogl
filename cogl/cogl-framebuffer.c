@@ -50,12 +50,6 @@
 #include "cogl-error-private.h"
 #include "cogl-texture-gl-private.h"
 
-typedef struct _CoglFramebufferStackEntry
-{
-  CoglFramebuffer *draw_buffer;
-  CoglFramebuffer *read_buffer;
-} CoglFramebufferStackEntry;
-
 extern CoglObjectClass _cogl_onscreen_class;
 
 #ifdef COGL_ENABLE_DEBUG
@@ -97,7 +91,6 @@ void
 _cogl_framebuffer_init (CoglFramebuffer *framebuffer,
                         CoglContext *ctx,
                         CoglFramebufferType type,
-                        CoglPixelFormat format,
                         int width,
                         int height)
 {
@@ -106,7 +99,7 @@ _cogl_framebuffer_init (CoglFramebuffer *framebuffer,
   framebuffer->type = type;
   framebuffer->width = width;
   framebuffer->height = height;
-  framebuffer->format = format;
+  framebuffer->internal_format = COGL_PIXEL_FORMAT_RGBA_8888_PRE;
   framebuffer->viewport_x = 0;
   framebuffer->viewport_y = 0;
   framebuffer->viewport_width = width;
@@ -163,6 +156,13 @@ _cogl_framebuffer_init (CoglFramebuffer *framebuffer,
    * texture coordinates that may later become invalid.
    */
   ctx->framebuffers = g_list_prepend (ctx->framebuffers, framebuffer);
+}
+
+void
+_cogl_framebuffer_set_internal_format (CoglFramebuffer *framebuffer,
+                                       CoglPixelFormat internal_format)
+{
+  framebuffer->internal_format = internal_format;
 }
 
 void
@@ -452,15 +452,43 @@ cogl_framebuffer_clear (CoglFramebuffer *framebuffer,
                             cogl_color_get_alpha_float (color));
 }
 
+/* We will lazily allocate framebuffers if necessary when querying
+ * their size/viewport but note we need to be careful in the case of
+ * onscreen framebuffers that are instantiated with an initial request
+ * size that we don't trigger an allocation when this is queried since
+ * that would lead to a recursion when the winsys backend queries this
+ * requested size during allocation. */
+static void
+ensure_size_initialized (CoglFramebuffer *framebuffer)
+{
+  /* In the case of offscreen framebuffers backed by a texture then
+   * until that texture has been allocated we might not know the size
+   * of the framebuffer */
+  if (framebuffer->width < 0)
+    {
+      /* Currently we assume the size is always initialized for
+       * onscreen framebuffers. */
+      _COGL_RETURN_IF_FAIL (cogl_is_offscreen (framebuffer));
+
+      /* We also assume the size would have been initialized if the
+       * framebuffer were allocated. */
+      _COGL_RETURN_IF_FAIL (!framebuffer->allocated);
+
+      cogl_framebuffer_allocate (framebuffer, NULL);
+    }
+}
+
 int
 cogl_framebuffer_get_width (CoglFramebuffer *framebuffer)
 {
+  ensure_size_initialized (framebuffer);
   return framebuffer->width;
 }
 
 int
 cogl_framebuffer_get_height (CoglFramebuffer *framebuffer)
 {
+  ensure_size_initialized (framebuffer);
   return framebuffer->height;
 }
 
@@ -528,12 +556,14 @@ cogl_framebuffer_get_viewport_y (CoglFramebuffer *framebuffer)
 float
 cogl_framebuffer_get_viewport_width (CoglFramebuffer *framebuffer)
 {
+  ensure_size_initialized (framebuffer);
   return framebuffer->viewport_width;
 }
 
 float
 cogl_framebuffer_get_viewport_height (CoglFramebuffer *framebuffer)
 {
+  ensure_size_initialized (framebuffer);
   return framebuffer->viewport_height;
 }
 
@@ -541,6 +571,8 @@ void
 cogl_framebuffer_get_viewport4fv (CoglFramebuffer *framebuffer,
                                   float *viewport)
 {
+  ensure_size_initialized (framebuffer);
+
   viewport[0] = framebuffer->viewport_x;
   viewport[1] = framebuffer->viewport_y;
   viewport[2] = framebuffer->viewport_width;
@@ -612,35 +644,27 @@ _cogl_offscreen_new_with_texture_full (CoglTexture *texture,
   CoglContext *ctx = texture->context;
   CoglOffscreen *offscreen;
   CoglFramebuffer *fb;
-  int level_width;
-  int level_height;
   CoglOffscreen *ret;
 
   _COGL_RETURN_VAL_IF_FAIL (cogl_is_texture (texture), NULL);
-  _COGL_RETURN_VAL_IF_FAIL (level < _cogl_texture_get_n_levels (texture),
-                            NULL);
-
-  _cogl_texture_get_level_size (texture,
-                                level,
-                                &level_width,
-                                &level_height,
-                                NULL);
 
   offscreen = g_new0 (CoglOffscreen, 1);
   offscreen->texture = cogl_object_ref (texture);
   offscreen->texture_level = level;
-  offscreen->texture_level_width = level_width;
-  offscreen->texture_level_height = level_height;
   offscreen->create_flags = create_flags;
 
   fb = COGL_FRAMEBUFFER (offscreen);
 
+  /* NB: we can't assume we can query the texture's width yet, since
+   * it might not have been allocated yet and for example if the
+   * texture is being loaded from a file then the file might not
+   * have been read yet. */
+
   _cogl_framebuffer_init (fb,
                           ctx,
                           COGL_FRAMEBUFFER_TYPE_OFFSCREEN,
-                          cogl_texture_get_format (texture),
-                          level_width,
-                          level_height);
+                          -1, /* unknown width, until allocation */
+                          -1); /* unknown height until allocation */
 
   ret = _cogl_offscreen_object_new (offscreen);
 
@@ -736,6 +760,11 @@ cogl_framebuffer_allocate (CoglFramebuffer *framebuffer,
           return FALSE;
         }
 
+      if (!cogl_texture_allocate (offscreen->texture, error))
+        return FALSE;
+
+      /* NB: it's only after allocating the texture that we will
+       * determine whether a texture needs slicing... */
       if (cogl_texture_is_sliced (offscreen->texture))
         {
           _cogl_set_error (error, COGL_SYSTEM_ERROR,
@@ -745,8 +774,17 @@ cogl_framebuffer_allocate (CoglFramebuffer *framebuffer,
           return FALSE;
         }
 
-      if (!cogl_texture_allocate (offscreen->texture, error))
-        return FALSE;
+      /* Now that the texture has been allocated we can determine a
+       * size for the framebuffer... */
+      framebuffer->width = cogl_texture_get_width (offscreen->texture);
+      framebuffer->height = cogl_texture_get_height (offscreen->texture);
+      framebuffer->viewport_width = framebuffer->width;
+      framebuffer->viewport_height = framebuffer->height;
+
+      /* Forward the texture format as the internal format of the
+       * framebuffer */
+      framebuffer->internal_format =
+        _cogl_texture_get_format (offscreen->texture);
 
       if (!ctx->driver_vtable->offscreen_allocate (offscreen, error))
         return FALSE;
@@ -755,252 +793,6 @@ cogl_framebuffer_allocate (CoglFramebuffer *framebuffer,
   framebuffer->allocated = TRUE;
 
   return TRUE;
-}
-
-static CoglFramebufferStackEntry *
-create_stack_entry (CoglFramebuffer *draw_buffer,
-                    CoglFramebuffer *read_buffer)
-{
-  CoglFramebufferStackEntry *entry = g_slice_new (CoglFramebufferStackEntry);
-
-  entry->draw_buffer = draw_buffer;
-  entry->read_buffer = read_buffer;
-
-  return entry;
-}
-
-GSList *
-_cogl_create_framebuffer_stack (void)
-{
-  CoglFramebufferStackEntry *entry;
-  GSList *stack = NULL;
-
-  entry = create_stack_entry (NULL, NULL);
-
-  return g_slist_prepend (stack, entry);
-}
-
-void
-_cogl_free_framebuffer_stack (GSList *stack)
-{
-  GSList *l;
-
-  for (l = stack; l != NULL; l = l->next)
-    {
-      CoglFramebufferStackEntry *entry = l->data;
-
-      if (entry->draw_buffer)
-        cogl_object_unref (entry->draw_buffer);
-
-      if (entry->read_buffer)
-        cogl_object_unref (entry->draw_buffer);
-
-      g_slice_free (CoglFramebufferStackEntry, entry);
-    }
-  g_slist_free (stack);
-}
-
-static void
-notify_buffers_changed (CoglFramebuffer *old_draw_buffer,
-                        CoglFramebuffer *new_draw_buffer,
-                        CoglFramebuffer *old_read_buffer,
-                        CoglFramebuffer *new_read_buffer)
-{
-  /* XXX: To support the deprecated cogl_set_draw_buffer API we keep
-   * track of the last onscreen framebuffer that was set so that it
-   * can be restored if the COGL_WINDOW_BUFFER enum is used. A
-   * reference isn't taken to the framebuffer because otherwise we
-   * would have a circular reference between the context and the
-   * framebuffer. Instead the pointer is set to NULL in
-   * _cogl_onscreen_free as a kind of a cheap weak reference */
-  if (new_draw_buffer &&
-      new_draw_buffer->type == COGL_FRAMEBUFFER_TYPE_ONSCREEN)
-    new_draw_buffer->context->window_buffer = new_draw_buffer;
-}
-
-/* Set the current framebuffer without checking if it's already the
- * current framebuffer. This is used by cogl_pop_framebuffer while
- * the top of the stack is currently not up to date. */
-static void
-_cogl_set_framebuffers_real (CoglFramebuffer *draw_buffer,
-                             CoglFramebuffer *read_buffer)
-{
-  CoglFramebufferStackEntry *entry;
-
-  _COGL_GET_CONTEXT (ctx, NO_RETVAL);
-
-  _COGL_RETURN_IF_FAIL (ctx != NULL);
-  _COGL_RETURN_IF_FAIL (draw_buffer && read_buffer ?
-                    draw_buffer->context == read_buffer->context : TRUE);
-
-  entry = ctx->framebuffer_stack->data;
-
-  notify_buffers_changed (entry->draw_buffer,
-                          draw_buffer,
-                          entry->read_buffer,
-                          read_buffer);
-
-  if (draw_buffer)
-    cogl_object_ref (draw_buffer);
-  if (entry->draw_buffer)
-    cogl_object_unref (entry->draw_buffer);
-
-  if (read_buffer)
-    cogl_object_ref (read_buffer);
-  if (entry->read_buffer)
-    cogl_object_unref (entry->read_buffer);
-
-  entry->draw_buffer = draw_buffer;
-  entry->read_buffer = read_buffer;
-}
-
-static void
-_cogl_set_framebuffers (CoglFramebuffer *draw_buffer,
-                        CoglFramebuffer *read_buffer)
-{
-  CoglFramebuffer *current_draw_buffer;
-  CoglFramebuffer *current_read_buffer;
-
-  _COGL_RETURN_IF_FAIL (cogl_is_framebuffer (draw_buffer));
-  _COGL_RETURN_IF_FAIL (cogl_is_framebuffer (read_buffer));
-
-  current_draw_buffer = cogl_get_draw_framebuffer ();
-  current_read_buffer = _cogl_get_read_framebuffer ();
-
-  if (current_draw_buffer != draw_buffer ||
-      current_read_buffer != read_buffer)
-    _cogl_set_framebuffers_real (draw_buffer, read_buffer);
-}
-
-void
-cogl_set_framebuffer (CoglFramebuffer *framebuffer)
-{
-  _cogl_set_framebuffers (framebuffer, framebuffer);
-}
-
-/* XXX: deprecated API */
-void
-cogl_set_draw_buffer (CoglBufferTarget target, CoglHandle handle)
-{
-  _COGL_GET_CONTEXT (ctx, NO_RETVAL);
-
-  if (target == COGL_WINDOW_BUFFER)
-    handle = ctx->window_buffer;
-
-  /* This is deprecated public API. The public API doesn't currently
-     really expose the concept of separate draw and read buffers so
-     for the time being this actually just sets both buffers */
-  cogl_set_framebuffer (handle);
-}
-
-CoglFramebuffer *
-cogl_get_draw_framebuffer (void)
-{
-  CoglFramebufferStackEntry *entry;
-
-  _COGL_GET_CONTEXT (ctx, NULL);
-
-  g_assert (ctx->framebuffer_stack);
-
-  entry = ctx->framebuffer_stack->data;
-
-  return entry->draw_buffer;
-}
-
-CoglFramebuffer *
-_cogl_get_read_framebuffer (void)
-{
-  CoglFramebufferStackEntry *entry;
-
-  _COGL_GET_CONTEXT (ctx, NULL);
-
-  g_assert (ctx->framebuffer_stack);
-
-  entry = ctx->framebuffer_stack->data;
-
-  return entry->read_buffer;
-}
-
-void
-_cogl_push_framebuffers (CoglFramebuffer *draw_buffer,
-                         CoglFramebuffer *read_buffer)
-{
-  CoglContext *ctx;
-  CoglFramebuffer *old_draw_buffer, *old_read_buffer;
-
-  _COGL_RETURN_IF_FAIL (cogl_is_framebuffer (draw_buffer));
-  _COGL_RETURN_IF_FAIL (cogl_is_framebuffer (read_buffer));
-
-  ctx = draw_buffer->context;
-  _COGL_RETURN_IF_FAIL (ctx != NULL);
-  _COGL_RETURN_IF_FAIL (draw_buffer->context == read_buffer->context);
-
-  _COGL_RETURN_IF_FAIL (ctx->framebuffer_stack != NULL);
-
-  /* Copy the top of the stack so that when we call cogl_set_framebuffer
-     it will still know what the old framebuffer was */
-  old_draw_buffer = cogl_get_draw_framebuffer ();
-  if (old_draw_buffer)
-    cogl_object_ref (old_draw_buffer);
-  old_read_buffer = _cogl_get_read_framebuffer ();
-  if (old_read_buffer)
-    cogl_object_ref (old_read_buffer);
-  ctx->framebuffer_stack =
-    g_slist_prepend (ctx->framebuffer_stack,
-                     create_stack_entry (old_draw_buffer,
-                                         old_read_buffer));
-
-  _cogl_set_framebuffers (draw_buffer, read_buffer);
-}
-
-void
-cogl_push_framebuffer (CoglFramebuffer *buffer)
-{
-  _cogl_push_framebuffers (buffer, buffer);
-}
-
-/* XXX: deprecated API */
-void
-cogl_push_draw_buffer (void)
-{
-  cogl_push_framebuffer (cogl_get_draw_framebuffer ());
-}
-
-void
-cogl_pop_framebuffer (void)
-{
-  CoglFramebufferStackEntry *to_pop;
-  CoglFramebufferStackEntry *to_restore;
-
-  _COGL_GET_CONTEXT (ctx, NO_RETVAL);
-
-  g_assert (ctx->framebuffer_stack != NULL);
-  g_assert (ctx->framebuffer_stack->next != NULL);
-
-  to_pop = ctx->framebuffer_stack->data;
-  to_restore = ctx->framebuffer_stack->next->data;
-
-  if (to_pop->draw_buffer != to_restore->draw_buffer ||
-      to_pop->read_buffer != to_restore->read_buffer)
-    notify_buffers_changed (to_pop->draw_buffer,
-                            to_restore->draw_buffer,
-                            to_pop->read_buffer,
-                            to_restore->read_buffer);
-
-  cogl_object_unref (to_pop->draw_buffer);
-  cogl_object_unref (to_pop->read_buffer);
-  g_slice_free (CoglFramebufferStackEntry, to_pop);
-
-  ctx->framebuffer_stack =
-    g_slist_delete_link (ctx->framebuffer_stack,
-                         ctx->framebuffer_stack);
-}
-
-/* XXX: deprecated API */
-void
-cogl_pop_draw_buffer (void)
-{
-  cogl_pop_framebuffer ();
 }
 
 static unsigned long
@@ -1312,12 +1104,6 @@ cogl_framebuffer_set_dither_enabled (CoglFramebuffer *framebuffer,
       COGL_FRAMEBUFFER_STATE_DITHER;
 }
 
-CoglPixelFormat
-cogl_framebuffer_get_color_format (CoglFramebuffer *framebuffer)
-{
-  return framebuffer->format;
-}
-
 void
 cogl_framebuffer_set_depth_texture_enabled (CoglFramebuffer *framebuffer,
                                             CoglBool enabled)
@@ -1617,7 +1403,7 @@ _cogl_blit_framebuffer (CoglFramebuffer *src,
   _COGL_RETURN_IF_FAIL (cogl_is_offscreen (src));
   _COGL_RETURN_IF_FAIL (cogl_is_offscreen (dest));
   /* The buffers must be the same format */
-  _COGL_RETURN_IF_FAIL (src->format == dest->format);
+  _COGL_RETURN_IF_FAIL (src->internal_format == dest->internal_format);
 
   /* Make sure the current framebuffers are bound. We explicitly avoid
      flushing the clip state so we can bind our own empty state */
