@@ -23,6 +23,7 @@
  * Authors:
  *   Robert Bragg <robert@linux.intel.com>
  *   Neil Roberts <neil@linux.intel.com>
+ *   Stephen Just <stephenjust@gmail.com>
  */
 
 #ifdef HAVE_CONFIG_H
@@ -131,29 +132,6 @@ _cogl_winsys_egl_display_destroy (CoglDisplay *display)
   CoglDisplayEGL *egl_display = display->winsys;
 
   g_slice_free (CoglDisplayRpi, egl_display->platform);
-}
-
-static int
-_cogl_winsys_egl_add_config_attributes (CoglDisplay *display,
-					CoglFramebufferConfig *config,
-					EGLint *attb) {
-  int i = 0;
-  attb[i++] = EGL_RED_SIZE;
-  attb[i++] = 8;
-  attb[i++] = EGL_BLUE_SIZE;
-  attb[i++] = 8;
-  attb[i++] = EGL_GREEN_SIZE;
-  attb[i++] = 8;
-  attb[i++] = EGL_ALPHA_SIZE;
-  attb[i++] = 8;
-  attb[i++] = EGL_DEPTH_SIZE;
-  attb[i++] = 16;
-  attb[i++] = EGL_SAMPLES;
-  attb[i++] = 4;
-  attb[i++] = EGL_SURFACE_TYPE;
-  attb[i++] = EGL_WINDOW_BIT;
-  attb[i++] = EGL_NONE;
-  return i;
 }
 
 /**
@@ -377,8 +355,7 @@ _cogl_winsys_egl_vtable =
     .display_destroy = _cogl_winsys_egl_display_destroy,
     .context_created = _cogl_winsys_egl_context_created,
     .cleanup_context = cleanup_context,
-    .onscreen_init = _cogl_winsys_egl_onscreen_init,
-    .add_config_attributes = _cogl_winsys_egl_add_config_attributes,
+    .onscreen_init = _cogl_winsys_egl_onscreen_init
   };
 
 const CoglWinsysVtable *
