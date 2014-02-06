@@ -25,7 +25,7 @@ m4_define([cogl_version],
 dnl Since the core Cogl library has to also maintain support for the
 dnl Cogl 1.x API for Clutter then we track the 1.x version separately.
 m4_define([cogl_1_minor_version], [17])
-m4_define([cogl_1_micro_version], [1])
+m4_define([cogl_1_micro_version], [3])
 m4_define([cogl_1_version], [1.cogl_1_minor_version.cogl_1_micro_version])
 
 dnl ================================================================
@@ -55,9 +55,9 @@ dnl ================================================================
 #
 #  5. If any interfaces have been removed since the last public release,
 #     then set AGE to 0.
-m4_define([cogl_lt_current], 18)
+m4_define([cogl_lt_current], 19)
 m4_define([cogl_lt_revision], 0)
-m4_define([cogl_lt_age], 3)
+m4_define([cogl_lt_age], 0)
 # We do also tell libtool the pretty version:
 m4_define([cogl_lt_release], [cogl_version])
 
@@ -1498,9 +1498,11 @@ cogl-path/Makefile
 cogl-path/cogl-path-1.0.pc
 cogl-path/cogl-path-2.0-experimental.pc
 cogl-gst/Makefile
-cogl-gst/cogl-gst.pc
+cogl-gst/cogl-gst-1.0.pc
+cogl-gst/cogl-gst-2.0-experimental.pc
 cogl-gles2/Makefile
-cogl-gles2/cogl-gles2-experimental.pc
+cogl-gles2/cogl-gles2-1.0.pc
+cogl-gles2/cogl-gles2-2.0-experimental.pc
 doc/Makefile
 doc/reference/Makefile
 doc/reference/cogl/Makefile

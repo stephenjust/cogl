@@ -37,36 +37,35 @@
 COGL_BEGIN_DECLS
 
 /**
- * cogl_texture_2d_new_from_foreign:
+ * cogl_texture_2d_gl_new_from_foreign:
  * @ctx: A #CoglContext
  * @gl_handle: A GL handle for a GL_TEXTURE_2D texture object
  * @width: Width of the foreign GL texture
  * @height: Height of the foreign GL texture
  * @format: The format of the texture
- * @error: A #CoglError for exceptions
  *
  * Wraps an existing GL_TEXTURE_2D texture object as a #CoglTexture2D.
  * This can be used for integrating Cogl with software using OpenGL
  * directly.
  *
+ * The texture is still configurable until it has been allocated so
+ * for example you can declare whether the texture is premultiplied
+ * with cogl_texture_set_premultiplied().
+ *
  * <note>The results are undefined for passing an invalid @gl_handle
  * or if @width or @height don't have the correct texture
  * geometry.</note>
  *
- * Return value: (transfer full): A newly allocated #CoglTexture2D, or
- *          if Cogl could not validate the @gl_handle in some way
- *          (perhaps because of an unsupported format) it will return
- *          %NULL and set @error.
+ * Returns: (transfer full): A newly allocated #CoglTexture2D
  *
  * Since: 2.0
  */
 CoglTexture2D *
-cogl_texture_2d_new_from_foreign (CoglContext *ctx,
-                                  unsigned int gl_handle,
-                                  int width,
-                                  int height,
-                                  CoglPixelFormat format,
-                                  CoglError **error);
+cogl_texture_2d_gl_new_from_foreign (CoglContext *ctx,
+                                     unsigned int gl_handle,
+                                     int width,
+                                     int height,
+                                     CoglPixelFormat format);
 
 COGL_END_DECLS
 

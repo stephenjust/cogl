@@ -67,7 +67,7 @@ COGL_BEGIN_DECLS
  *
  * #CoglError domain for texture errors.
  *
- * Since: 2.0
+ * Since: 1.8
  * Stability: Unstable
  */
 #define COGL_TEXTURE_ERROR (cogl_texture_error_quark ())
@@ -76,10 +76,13 @@ COGL_BEGIN_DECLS
 /**
  * CoglTextureError:
  * @COGL_TEXTURE_ERROR_SIZE: Unsupported size
+ * @COGL_TEXTURE_ERROR_FORMAT: Unsupported format
+ * @COGL_TEXTURE_ERROR_TYPE: A primitive texture type that is
+ *   unsupported by the driver was used
  *
  * Error codes that can be thrown when allocating textures.
  *
- * Since: 2.0
+ * Since: 1.8
  * Stability: Unstable
  */
 typedef enum {
@@ -110,141 +113,6 @@ typedef enum {
 uint32_t cogl_texture_error_quark (void);
 
 /**
- * cogl_texture_new_with_size:
- * @width: width of texture in pixels.
- * @height: height of texture in pixels.
- * @flags: Optional flags for the texture, or %COGL_TEXTURE_NONE
- * @internal_format: the #CoglPixelFormat to use for the GPU storage of the
- *    texture.
- *
- * Creates a new #CoglTexture with the specified dimensions and pixel format.
- *
- * Return value: (transfer full): A newly created #CoglTexture or %NULL on failure
- *
- * Since: 0.8
- */
-CoglTexture *
-cogl_texture_new_with_size (unsigned int width,
-                            unsigned int height,
-                            CoglTextureFlags flags,
-                            CoglPixelFormat internal_format);
-
-/**
- * cogl_texture_new_from_file:
- * @filename: the file to load
- * @flags: Optional flags for the texture, or %COGL_TEXTURE_NONE
- * @internal_format: the #CoglPixelFormat to use for the GPU storage of the
- *    texture. If %COGL_PIXEL_FORMAT_ANY is given then a premultiplied
- *    format similar to the format of the source data will be used. The
- *    default blending equations of Cogl expect premultiplied color data;
- *    the main use of passing a non-premultiplied format here is if you
- *    have non-premultiplied source data and are going to adjust the blend
- *    mode (see cogl_material_set_blend()) or use the data for something
- *    other than straight blending.
- * @error: return location for a #CoglError or %NULL
- *
- * Creates a #CoglTexture from an image file.
- *
- * Return value: (transfer full): A newly created #CoglTexture or
- *               %NULL on failure
- *
- * Since: 0.8
- */
-CoglTexture *
-cogl_texture_new_from_file (const char       *filename,
-                            CoglTextureFlags   flags,
-                            CoglPixelFormat    internal_format,
-                            CoglError           **error);
-
-/**
- * cogl_texture_new_from_data:
- * @width: width of texture in pixels
- * @height: height of texture in pixels
- * @flags: Optional flags for the texture, or %COGL_TEXTURE_NONE
- * @format: the #CoglPixelFormat the buffer is stored in in RAM
- * @internal_format: the #CoglPixelFormat that will be used for storing
- *    the buffer on the GPU. If COGL_PIXEL_FORMAT_ANY is given then a
- *    premultiplied format similar to the format of the source data will
- *    be used. The default blending equations of Cogl expect premultiplied
- *    color data; the main use of passing a non-premultiplied format here
- *    is if you have non-premultiplied source data and are going to adjust
- *    the blend mode (see cogl_material_set_blend()) or use the data for
- *    something other than straight blending.
- * @rowstride: the memory offset in bytes between the starts of
- *    scanlines in @data
- * @data: pointer the memory region where the source buffer resides
- *
- * Creates a new #CoglTexture based on data residing in memory.
- *
- * Return value: (transfer full): A newly created #CoglTexture or
- *               %NULL on failure
- *
- * Since: 0.8
- */
-CoglTexture *
-cogl_texture_new_from_data (int width,
-                            int height,
-                            CoglTextureFlags flags,
-                            CoglPixelFormat format,
-                            CoglPixelFormat internal_format,
-                            int rowstride,
-                            const uint8_t *data);
-
-/**
- * cogl_texture_new_from_foreign:
- * @gl_handle: opengl handle of foreign texture.
- * @gl_target: opengl target type of foreign texture
- * @width: width of foreign texture
- * @height: height of foreign texture.
- * @x_pot_waste: horizontal waste on the right hand edge of the texture.
- * @y_pot_waste: vertical waste on the bottom edge of the texture.
- * @format: format of the foreign texture.
- *
- * Creates a #CoglTexture based on an existing OpenGL texture; the
- * width, height and format are passed along since it is not always
- * possible to query these from OpenGL.
- *
- * The waste arguments allow you to create a Cogl texture that maps to
- * a region smaller than the real OpenGL texture. For instance if your
- * hardware only supports power-of-two textures you may load a
- * non-power-of-two image into a larger power-of-two texture and use
- * the waste arguments to tell Cogl which region should be mapped to
- * the texture coordinate range [0:1].
- *
- * Return value: (transfer full): A newly created #CoglTexture or
- *               %NULL on failure
- *
- * Since: 0.8
- */
-CoglTexture *
-cogl_texture_new_from_foreign (unsigned int gl_handle,
-                               unsigned int gl_target,
-                               unsigned int width,
-                               unsigned int height,
-                               unsigned int x_pot_waste,
-                               unsigned int y_pot_waste,
-                               CoglPixelFormat format);
-
-/**
- * cogl_texture_new_from_bitmap:
- * @bitmap: A #CoglBitmap pointer
- * @flags: Optional flags for the texture, or %COGL_TEXTURE_NONE
- * @internal_format: the #CoglPixelFormat to use for the GPU storage of the
- * texture
- *
- * Creates a #CoglTexture from a #CoglBitmap.
- *
- * Return value: (transfer full): A newly created #CoglTexture or
- *               %NULL on failure
- *
- * Since: 1.0
- */
-CoglTexture *
-cogl_texture_new_from_bitmap (CoglBitmap *bitmap,
-                              CoglTextureFlags flags,
-                              CoglPixelFormat internal_format);
-
-/**
  * cogl_is_texture:
  * @object: A #CoglObject pointer
  *
@@ -255,6 +123,129 @@ cogl_texture_new_from_bitmap (CoglBitmap *bitmap,
  */
 CoglBool
 cogl_is_texture (void *object);
+
+/**
+ * CoglTextureComponents:
+ * @COGL_TEXTURE_COMPONENTS_A: Only the alpha component
+ * @COGL_TEXTURE_COMPONENTS_RG: Red and green components. Note that
+ *   this can only be used if the %COGL_FEATURE_ID_TEXTURE_RG feature
+ *   is advertised.
+ * @COGL_TEXTURE_COMPONENTS_RGB: Red, green and blue components
+ * @COGL_TEXTURE_COMPONENTS_RGBA: Red, green, blue and alpha components
+ * @COGL_TEXTURE_COMPONENTS_DEPTH: Only a depth component
+ *
+ * See cogl_texture_set_components().
+ *
+ * Since: 1.18
+ */
+typedef enum _CoglTextureComponents
+{
+  COGL_TEXTURE_COMPONENTS_A = 1,
+  COGL_TEXTURE_COMPONENTS_RG,
+  COGL_TEXTURE_COMPONENTS_RGB,
+  COGL_TEXTURE_COMPONENTS_RGBA,
+  COGL_TEXTURE_COMPONENTS_DEPTH
+} CoglTextureComponents;
+
+/**
+ * cogl_texture_set_components:
+ * @texture: a #CoglTexture pointer.
+ *
+ * Affects the internal storage format for this texture by specifying
+ * what components will be required for sampling later.
+ *
+ * This api affects how data is uploaded to the GPU since unused
+ * components can potentially be discarded from source data.
+ *
+ * For textures created by the ‘_with_size’ constructors the default
+ * is %COGL_TEXTURE_COMPONENTS_RGBA. The other constructors which take
+ * a %CoglBitmap or a data pointer default to the same components as
+ * the pixel format of the data.
+ *
+ * Note that the %COGL_TEXTURE_COMPONENTS_RG format is not available
+ * on all drivers. The availability can be determined by checking for
+ * the %COGL_FEATURE_ID_TEXTURE_RG feature. If this format is used on
+ * a driver where it is not available then %COGL_TEXTURE_ERROR_FORMAT
+ * will be raised when the texture is allocated. Even if the feature
+ * is not available then %COGL_PIXEL_FORMAT_RG_88 can still be used as
+ * an image format as long as %COGL_TEXTURE_COMPONENTS_RG isn't used
+ * as the texture's components.
+ *
+ * Since: 1.18
+ */
+void
+cogl_texture_set_components (CoglTexture *texture,
+                             CoglTextureComponents components);
+
+/**
+ * cogl_texture_get_components:
+ * @texture: a #CoglTexture pointer.
+ *
+ * Queries what components the given @texture stores internally as set
+ * via cogl_texture_set_components().
+ *
+ * For textures created by the ‘_with_size’ constructors the default
+ * is %COGL_TEXTURE_COMPONENTS_RGBA. The other constructors which take
+ * a %CoglBitmap or a data pointer default to the same components as
+ * the pixel format of the data.
+ *
+ * Since: 1.18
+ */
+CoglTextureComponents
+cogl_texture_get_components (CoglTexture *texture);
+
+/**
+ * cogl_texture_set_premultiplied:
+ * @texture: a #CoglTexture pointer.
+ * @premultiplied: Whether any internally stored red, green or blue
+ *                 components are pre-multiplied by an alpha
+ *                 component.
+ *
+ * Affects the internal storage format for this texture by specifying
+ * whether red, green and blue color components should be stored as
+ * pre-multiplied alpha values.
+ *
+ * This api affects how data is uploaded to the GPU since Cogl will
+ * convert source data to have premultiplied or unpremultiplied
+ * components according to this state.
+ *
+ * For example if you create a texture via
+ * cogl_texture_2d_new_with_size() and then upload data via
+ * cogl_texture_set_data() passing a source format of
+ * %COGL_PIXEL_FORMAT_RGBA_8888 then Cogl will internally multiply the
+ * red, green and blue components of the source data by the alpha
+ * component, for each pixel so that the internally stored data has
+ * pre-multiplied alpha components. If you instead upload data that
+ * already has pre-multiplied components by passing
+ * %COGL_PIXEL_FORMAT_RGBA_8888_PRE as the source format to
+ * cogl_texture_set_data() then the data can be uploaded without being
+ * converted.
+ *
+ * By default the @premultipled state is @TRUE.
+ *
+ * Since: 1.18
+ */
+void
+cogl_texture_set_premultiplied (CoglTexture *texture,
+                                CoglBool premultiplied);
+
+/**
+ * cogl_texture_get_premultiplied:
+ * @texture: a #CoglTexture pointer.
+ *
+ * Queries the pre-multiplied alpha status for internally stored red,
+ * green and blue components for the given @texture as set by
+ * cogl_texture_set_premultiplied().
+ *
+ * By default the pre-multipled state is @TRUE.
+ *
+ * Return value: %TRUE if red, green and blue components are
+ *               internally stored pre-multiplied by the alpha
+ *               value or %FALSE if not.
+ * Since: 1.18
+ */
+CoglBool
+cogl_texture_get_premultiplied (CoglTexture *texture);
 
 /**
  * cogl_texture_get_width:
@@ -277,50 +268,6 @@ cogl_texture_get_width (CoglTexture *texture);
  */
 unsigned int
 cogl_texture_get_height (CoglTexture *texture);
-
-/**
- * cogl_texture_get_format:
- * @texture: a #CoglTexture pointer.
- *
- * Queries the #CoglPixelFormat of a cogl texture.
- *
- * Return value: the #CoglPixelFormat of the GPU side texture
- */
-CoglPixelFormat
-cogl_texture_get_format (CoglTexture *texture);
-
-
-/**
- * cogl_texture_get_rowstride:
- * @texture a #CoglTexture pointer.
- *
- * Determines the bytes-per-pixel for the #CoglPixelFormat retrieved
- * from cogl_texture_get_format() and multiplies that by the texture's
- * width.
- *
- * <note>It's very unlikely that anyone would need to use this API to
- * query the internal rowstride of a #CoglTexture which can just be
- * considered an implementation detail. Actually it's not even useful
- * internally since underlying drivers are free to use a different
- * format</note>
- *
- * <note>This API is only here for backwards compatibility and
- * shouldn't be used in new code. In particular please don't be
- * mislead to pass the returned value to cogl_texture_get_data() for
- * the rowstride, since you should be passing the rowstride you desire
- * for your destination buffer not the rowstride of the source
- * texture.</note>
- *
- * Return value: The bytes-per-pixel for the current format
- *               multiplied by the texture's width
- *
- * Deprecated: 1.10: There's no replacement for the API but there's
- *                   also no known need for API either. It was just
- *                   a mistake that it was ever published.
- */
-COGL_DEPRECATED_IN_1_10
-unsigned int
-cogl_texture_get_rowstride (CoglTexture *texture);
 
 /**
  * cogl_texture_get_max_waste:
@@ -530,63 +477,6 @@ cogl_texture_set_region_from_bitmap (CoglTexture *texture,
                                      unsigned int dst_height,
                                      CoglBitmap *bitmap);
 #endif
-
-/**
- * cogl_texture_new_from_sub_texture:
- * @full_texture: a #CoglTexture pointer
- * @sub_x: X coordinate of the top-left of the subregion
- * @sub_y: Y coordinate of the top-left of the subregion
- * @sub_width: Width in pixels of the subregion
- * @sub_height: Height in pixels of the subregion
- *
- * Creates a new texture which represents a subregion of another
- * texture. The GL resources will be shared so that no new texture
- * data is actually allocated.
- *
- * Sub textures have undefined behaviour texture coordinates outside
- * of the range [0,1] are used. They also do not work with
- * CoglVertexBuffers.
- *
- * The sub texture will keep a reference to the full texture so you do
- * not need to keep one separately if you only want to use the sub
- * texture.
- *
- * Return value: (transfer full): A newly created #CoglTexture or
- *               %NULL on failure
- * Since: 1.2
- */
-CoglTexture *
-cogl_texture_new_from_sub_texture (CoglTexture *full_texture,
-                                   int sub_x,
-                                   int sub_y,
-                                   int sub_width,
-                                   int sub_height);
-
-/**
- * cogl_texture_ref: (skip)
- * @texture: a #CoglTexture.
- *
- * Increment the reference count for a cogl texture.
- *
- * Deprecated: 1.2: Use cogl_object_ref() instead
- *
- * Return value: the @texture pointer.
- */
-COGL_DEPRECATED_FOR (cogl_object_ref)
-void *
-cogl_texture_ref (void *texture);
-
-/**
- * cogl_texture_unref: (skip)
- * @texture: a #CoglTexture.
- *
- * Decrement the reference count for a cogl texture.
- *
- * Deprecated: 1.2: Use cogl_object_unref() instead
- */
-COGL_DEPRECATED_FOR (cogl_object_unref)
-void
-cogl_texture_unref (void *texture);
 
 /**
  * cogl_texture_allocate:

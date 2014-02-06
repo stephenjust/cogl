@@ -73,7 +73,6 @@ typedef struct _CoglTexture2DSliced CoglTexture2DSliced;
  *             are allowed along the right and bottom textures before
  *             they must be sliced to reduce the amount of waste. A
  *             negative can be passed to disable slicing.
- * @internal_format: The format of the texture
  *
  * Creates a #CoglTexture2DSliced that may internally be comprised of
  * 1 or more #CoglTexture2D textures depending on GPU limitations.
@@ -110,8 +109,7 @@ CoglTexture2DSliced *
 cogl_texture_2d_sliced_new_with_size (CoglContext *ctx,
                                       int width,
                                       int height,
-                                      int max_waste,
-                                      CoglPixelFormat internal_format);
+                                      int max_waste);
 
 /**
  * cogl_texture_2d_sliced_new_from_file:
@@ -121,14 +119,6 @@ cogl_texture_2d_sliced_new_with_size (CoglContext *ctx,
  *             are allowed along the right and bottom textures before
  *             they must be sliced to reduce the amount of waste. A
  *             negative can be passed to disable slicing.
- * @internal_format: the #CoglPixelFormat to use for the GPU storage of the
- *    texture. If %COGL_PIXEL_FORMAT_ANY is given then a premultiplied
- *    format similar to the format of the source data will be used. The
- *    default blending equations of Cogl expect premultiplied color data;
- *    the main use of passing a non-premultiplied format here is if you
- *    have non-premultiplied source data and are going to adjust the blend
- *    mode (see cogl_material_set_blend()) or use the data for something
- *    other than straight blending.
  * @error: A #CoglError to catch exceptional errors or %NULL
  *
  * Creates a #CoglTexture2DSliced from an image file.
@@ -147,6 +137,11 @@ cogl_texture_2d_sliced_new_with_size (CoglContext *ctx,
  * wasted padding at the bottom and right of the textures is less than
  * specified. A negative @max_waste will disable slicing.
  *
+ * The storage for the texture is not allocated before this function
+ * returns. You can call cogl_texture_allocate() to explicitly
+ * allocate the underlying storage or let Cogl automatically allocate
+ * storage lazily.
+ *
  * <note>It's possible for the allocation of a sliced texture to fail
  * later due to impossible slicing constraints if a negative
  * @max_waste value is given. If the given virtual texture size is
@@ -162,7 +157,6 @@ CoglTexture2DSliced *
 cogl_texture_2d_sliced_new_from_file (CoglContext *ctx,
                                       const char *filename,
                                       int max_waste,
-                                      CoglPixelFormat internal_format,
                                       CoglError **error);
 
 /**
@@ -175,14 +169,6 @@ cogl_texture_2d_sliced_new_from_file (CoglContext *ctx,
  *             are allowed along the right and bottom textures before
  *             they must be sliced to reduce the amount of waste. A
  *             negative can be passed to disable slicing.
- * @internal_format: the #CoglPixelFormat to use for the GPU storage of the
- *    texture. If %COGL_PIXEL_FORMAT_ANY is given then a premultiplied
- *    format similar to the format of the source data will be used. The
- *    default blending equations of Cogl expect premultiplied color data;
- *    the main use of passing a non-premultiplied format here is if you
- *    have non-premultiplied source data and are going to adjust the blend
- *    mode (see cogl_material_set_blend()) or use the data for something
- *    other than straight blending.
  * @rowstride: the memory offset in bytes between the start of each
  *    row in @data. A value of 0 will make Cogl automatically
  *    calculate @rowstride from @width and @format.
@@ -206,11 +192,22 @@ cogl_texture_2d_sliced_new_from_file (CoglContext *ctx,
  * wasted padding at the bottom and right of the textures is less than
  * specified. A negative @max_waste will disable slicing.
  *
+ * <note>This api will always immediately allocate GPU memory for all
+ * the required texture slices and upload the given data so that the
+ * @data pointer does not need to remain valid once this function
+ * returns. This means it is not possible to configure the texture
+ * before it is allocated. If you do need to configure the texture
+ * before allocation (to specify constraints on the internal format
+ * for example) then you can instead create a #CoglBitmap for your
+ * data and use cogl_texture_2d_sliced_new_from_bitmap() or use
+ * cogl_texture_2d_sliced_new_with_size() and then upload data using
+ * cogl_texture_set_data()</note>
+ *
  * <note>It's possible for the allocation of a sliced texture to fail
- * later due to impossible slicing constraints if a negative
- * @max_waste value is given. If the given virtual texture size is
- * larger than is supported by the hardware but slicing is disabled
- * the texture size would be too large to handle.</note>
+ * due to impossible slicing constraints if a negative @max_waste
+ * value is given. If the given virtual texture size is larger than is
+ * supported by the hardware but slicing is disabled the texture size
+ * would be too large to handle.</note>
  *
  * Return value: (transfer full): A newly created #CoglTexture2DSliced
  *               or %NULL on failure and @error will be updated.
@@ -223,7 +220,6 @@ cogl_texture_2d_sliced_new_from_data (CoglContext *ctx,
                                       int height,
                                       int max_waste,
                                       CoglPixelFormat format,
-                                      CoglPixelFormat internal_format,
                                       int rowstride,
                                       const uint8_t *data,
                                       CoglError **error);
@@ -235,15 +231,6 @@ cogl_texture_2d_sliced_new_from_data (CoglContext *ctx,
  *             are allowed along the right and bottom textures before
  *             they must be sliced to reduce the amount of waste. A
  *             negative can be passed to disable slicing.
- * @internal_format: the #CoglPixelFormat to use for the GPU storage of the
- *    texture. If %COGL_PIXEL_FORMAT_ANY is given then a premultiplied
- *    format similar to the format of the source data will be used. The
- *    default blending equations of Cogl expect premultiplied color data;
- *    the main use of passing a non-premultiplied format here is if you
- *    have non-premultiplied source data and are going to adjust the blend
- *    mode (see cogl_material_set_blend()) or use the data for something
- *    other than straight blending.
- * @error: A #CoglError to catch exceptional errors or %NULL
  *
  * Creates a new #CoglTexture2DSliced texture based on data residing
  * in a bitmap.
@@ -262,6 +249,11 @@ cogl_texture_2d_sliced_new_from_data (CoglContext *ctx,
  * wasted padding at the bottom and right of the textures is less than
  * specified. A negative @max_waste will disable slicing.
  *
+ * The storage for the texture is not allocated before this function
+ * returns. You can call cogl_texture_allocate() to explicitly
+ * allocate the underlying storage or let Cogl automatically allocate
+ * storage lazily.
+ *
  * <note>It's possible for the allocation of a sliced texture to fail
  * later due to impossible slicing constraints if a negative
  * @max_waste value is given. If the given virtual texture size is
@@ -275,9 +267,7 @@ cogl_texture_2d_sliced_new_from_data (CoglContext *ctx,
  */
 CoglTexture2DSliced *
 cogl_texture_2d_sliced_new_from_bitmap (CoglBitmap *bmp,
-                                        int max_waste,
-                                        CoglPixelFormat internal_format,
-                                        CoglError **error);
+                                        int max_waste);
 
 /**
  * cogl_is_texture_2d_sliced:

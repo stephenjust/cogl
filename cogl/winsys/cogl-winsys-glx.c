@@ -52,6 +52,7 @@
 #include "cogl-winsys-glx-private.h"
 #include "cogl-error-private.h"
 #include "cogl-poll-private.h"
+#include "cogl-version.h"
 
 #include <stdlib.h>
 #include <sys/types.h>
@@ -812,27 +813,30 @@ update_winsys_features (CoglContext *context, CoglError **error)
 
   if (glx_renderer->glXCopySubBuffer || context->glBlitFramebuffer)
     {
-      CoglGpuInfoArchitecture arch;
+      CoglGpuInfo *info = &context->gpu;
+      CoglGpuInfoArchitecture arch = info->architecture;
 
-      /* XXX: ONGOING BUG:
-       * (Don't change the line above since we use this to grep for
-       * un-resolved bug workarounds as part of the release process.)
-       *
+      COGL_FLAGS_SET (context->winsys_features, COGL_WINSYS_FEATURE_SWAP_REGION, TRUE);
+
+      /*
        * "The "drisw" binding in Mesa for loading sofware renderers is
        * broken, and neither glBlitFramebuffer nor glXCopySubBuffer
        * work correctly."
        * - ajax
        * - https://bugzilla.gnome.org/show_bug.cgi?id=674208
        *
-       * This is broken in software Mesa at least as of 7.10
+       * This is broken in software Mesa at least as of 7.10 and got
+       * fixed in Mesa 10.1
        */
-      arch = context->gpu.architecture;
-      if (arch != COGL_GPU_INFO_ARCHITECTURE_LLVMPIPE &&
-          arch != COGL_GPU_INFO_ARCHITECTURE_SOFTPIPE &&
-          arch != COGL_GPU_INFO_ARCHITECTURE_SWRAST)
+
+      if (info->driver_package == COGL_GPU_INFO_DRIVER_PACKAGE_MESA &&
+          info->driver_package_version < COGL_VERSION_ENCODE (10, 1, 0) &&
+          (arch == COGL_GPU_INFO_ARCHITECTURE_LLVMPIPE ||
+           arch == COGL_GPU_INFO_ARCHITECTURE_SOFTPIPE ||
+           arch == COGL_GPU_INFO_ARCHITECTURE_SWRAST))
 	{
 	  COGL_FLAGS_SET (context->winsys_features,
-			  COGL_WINSYS_FEATURE_SWAP_REGION, TRUE);
+			  COGL_WINSYS_FEATURE_SWAP_REGION, FALSE);
 	}
     }
 
@@ -846,6 +850,8 @@ update_winsys_features (CoglContext *context, CoglError **error)
 
   if (_cogl_winsys_has_feature (COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT))
     {
+      COGL_FLAGS_SET (context->winsys_features,
+		      COGL_WINSYS_FEATURE_SWAP_BUFFERS_EVENT, TRUE);
       /* TODO: remove this deprecated feature */
       COGL_FLAGS_SET (context->features,
                       COGL_FEATURE_ID_SWAP_BUFFERS_EVENT,
@@ -2500,11 +2506,11 @@ _cogl_winsys_texture_pixmap_x11_update (CoglTexturePixmapX11 *tex_pixmap,
           glx_tex_pixmap->glx_tex = COGL_TEXTURE (
             cogl_texture_rectangle_new_with_size (ctx,
                                                   tex->width,
-                                                  tex->height,
-                                                  texture_format,
-                                                  &error));
+                                                  tex->height));
 
-          if (glx_tex_pixmap->glx_tex)
+          _cogl_texture_set_internal_format (tex, texture_format);
+
+          if (cogl_texture_allocate (glx_tex_pixmap->glx_tex, &error))
             COGL_NOTE (TEXTURE_PIXMAP, "Created a texture rectangle for %p",
                        tex_pixmap);
           else
@@ -2522,8 +2528,9 @@ _cogl_winsys_texture_pixmap_x11_update (CoglTexturePixmapX11 *tex_pixmap,
           glx_tex_pixmap->glx_tex = COGL_TEXTURE (
             cogl_texture_2d_new_with_size (ctx,
                                            tex->width,
-                                           tex->height,
-                                           texture_format));
+                                           tex->height));
+
+          _cogl_texture_set_internal_format (tex, texture_format);
 
           if (cogl_texture_allocate (glx_tex_pixmap->glx_tex, &error))
             COGL_NOTE (TEXTURE_PIXMAP, "Created a texture 2d for %p",

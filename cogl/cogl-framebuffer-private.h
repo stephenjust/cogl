@@ -130,7 +130,7 @@ struct _CoglFramebuffer
   int                 height;
   /* Format of the pixels in the framebuffer (including the expected
      premult state) */
-  CoglPixelFormat     format;
+  CoglPixelFormat     internal_format;
   CoglBool            allocated;
 
   CoglMatrixStack    *modelview_stack;
@@ -205,8 +205,6 @@ struct _CoglOffscreen
 
   CoglTexture    *texture;
   int             texture_level;
-  int             texture_level_width;
-  int             texture_level_height;
 
   CoglTexture *depth_texture;
 
@@ -222,9 +220,24 @@ void
 _cogl_framebuffer_init (CoglFramebuffer *framebuffer,
                         CoglContext *ctx,
                         CoglFramebufferType type,
-                        CoglPixelFormat format,
                         int width,
                         int height);
+
+/* XXX: For a public api we might instead want a way to explicitly
+ * set the _premult status of a framebuffer or what components we
+ * care about instead of exposing the CoglPixelFormat
+ * internal_format.
+ *
+ * The current use case for this api is where we create an offscreen
+ * framebuffer for a shared atlas texture that has a format of
+ * RGBA_8888 disregarding the premultiplied alpha status for
+ * individual atlased textures or whether the alpha component is being
+ * discarded. We want to overried the internal_format that will be
+ * derived from the texture.
+ */
+void
+_cogl_framebuffer_set_internal_format (CoglFramebuffer *framebuffer,
+                                       CoglPixelFormat internal_format);
 
 void _cogl_framebuffer_free (CoglFramebuffer *framebuffer);
 

@@ -67,7 +67,6 @@ typedef struct _CoglAtlasTexture CoglAtlasTexture;
  * @ctx: A #CoglContext
  * @width: The width of your atlased texture.
  * @height: The height of your atlased texture.
- * @internal_format: The format of the texture
  *
  * Creates a #CoglAtlasTexture with a given @width and @height. A
  * #CoglAtlasTexture represents a sub-region within one of Cogl's
@@ -78,39 +77,50 @@ typedef struct _CoglAtlasTexture CoglAtlasTexture;
  * allocate the underlying storage or let Cogl automatically allocate
  * storage lazily.
  *
- * <note>This call can fail if Cogl considers the given
- * @internal_format incompatible with the format of its internal
+ * The texture is still configurable until it has been allocated so
+ * for example you can influence the internal format of the texture
+ * using cogl_texture_set_components() and
+ * cogl_texture_set_premultiplied().
+ *
+ * <note>Allocate call can fail if Cogl considers the internal
+ * format to be incompatible with the format of its internal
  * atlases.</note>
  *
  * <note>The returned #CoglAtlasTexture is a high-level meta-texture
  * with some limitations. See the documentation for #CoglMetaTexture
  * for more details.</note>
  *
- * Return value: (transfer full): A new #CoglAtlasTexture object with
- *          no storage allocated yet or %NULL on failure and @error
- *          will be updated.
+ * Returns: (transfer full): A new #CoglAtlasTexture object.
  * Since: 1.16
  * Stability: unstable
  */
 CoglAtlasTexture *
 cogl_atlas_texture_new_with_size (CoglContext *ctx,
                                   int width,
-                                  int height,
-                                  CoglPixelFormat internal_format,
-                                  CoglError **error);
+                                  int height);
 
 /**
  * cogl_atlas_texture_new_from_file:
  * @ctx: A #CoglContext
  * @filename: the file to load
- * @internal_format: The format of the texture
+ * @error: A #CoglError to catch exceptional errors or %NULL
  *
  * Creates a #CoglAtlasTexture from an image file. A #CoglAtlasTexture
  * represents a sub-region within one of Cogl's shared texture
  * atlases.
  *
- * <note>This call can fail if Cogl considers the given
- * @internal_format incompatible with the format of its internal
+ * The storage for the texture is not allocated before this function
+ * returns. You can call cogl_texture_allocate() to explicitly
+ * allocate the underlying storage or let Cogl automatically allocate
+ * storage lazily.
+ *
+ * The texture is still configurable until it has been allocated so
+ * for example you can influence the internal format of the texture
+ * using cogl_texture_set_components() and
+ * cogl_texture_set_premultiplied().
+ *
+ * <note>Allocate call can fail if Cogl considers the internal
+ * format to be incompatible with the format of its internal
  * atlases.</note>
  *
  * <note>The returned #CoglAtlasTexture is a high-level meta-texture
@@ -125,7 +135,6 @@ cogl_atlas_texture_new_with_size (CoglContext *ctx,
 CoglAtlasTexture *
 cogl_atlas_texture_new_from_file (CoglContext *ctx,
                                   const char *filename,
-                                  CoglPixelFormat internal_format,
                                   CoglError **error);
 
 /**
@@ -134,14 +143,6 @@ cogl_atlas_texture_new_from_file (CoglContext *ctx,
  * @width: width of texture in pixels
  * @height: height of texture in pixels
  * @format: the #CoglPixelFormat the buffer is stored in in RAM
- * @internal_format: the #CoglPixelFormat to use for the GPU storage of the
- *    texture. If %COGL_PIXEL_FORMAT_ANY is given then a premultiplied
- *    format similar to the format of the source data will be used. The
- *    default blending equations of Cogl expect premultiplied color data;
- *    the main use of passing a non-premultiplied format here is if you
- *    have non-premultiplied source data and are going to adjust the blend
- *    mode (see cogl_material_set_blend()) or use the data for something
- *    other than straight blending.
  * @rowstride: the memory offset in bytes between the start of each
  *    row in @data. A value of 0 will make Cogl automatically
  *    calculate @rowstride from @width and @format.
@@ -152,8 +153,19 @@ cogl_atlas_texture_new_from_file (CoglContext *ctx,
  * memory. A #CoglAtlasTexture represents a sub-region within one of
  * Cogl's shared texture atlases.
  *
- * <note>This call can fail if Cogl considers the given
- * @internal_format incompatible with the format of its internal
+ * <note>This api will always immediately allocate GPU memory for the
+ * texture and upload the given data so that the @data pointer does
+ * not need to remain valid once this function returns. This means it
+ * is not possible to configure the texture before it is allocated. If
+ * you do need to configure the texture before allocation (to specify
+ * constraints on the internal format for example) then you can
+ * instead create a #CoglBitmap for your data and use
+ * cogl_atlas_texture_new_from_bitmap() or use
+ * cogl_atlas_texture_new_with_size() and then upload data using
+ * cogl_texture_set_data()</note>
+ *
+ * <note>Allocate call can fail if Cogl considers the internal
+ * format to be incompatible with the format of its internal
  * atlases.</note>
  *
  * <note>The returned #CoglAtlasTexture is a high-level
@@ -170,45 +182,43 @@ cogl_atlas_texture_new_from_data (CoglContext *ctx,
                                   int width,
                                   int height,
                                   CoglPixelFormat format,
-                                  CoglPixelFormat internal_format,
                                   int rowstride,
                                   const uint8_t *data,
                                   CoglError **error);
 
 /**
  * cogl_atlas_texture_new_from_bitmap:
- * @bmp: A #CoglBitmap
- * @internal_format: the #CoglPixelFormat to use for the GPU storage of the
- *    texture. If %COGL_PIXEL_FORMAT_ANY is given then a premultiplied
- *    format similar to the format of the source data will be used. The
- *    default blending equations of Cogl expect premultiplied color data;
- *    the main use of passing a non-premultiplied format here is if you
- *    have non-premultiplied source data and are going to adjust the blend
- *    mode (see cogl_material_set_blend()) or use the data for something
- *    other than straight blending.
- * @error: A #CoglError to catch exceptional errors or %NULL
+ * @bitmap: A #CoglBitmap
  *
  * Creates a new #CoglAtlasTexture texture based on data residing in a
  * @bitmap. A #CoglAtlasTexture represents a sub-region within one of
  * Cogl's shared texture atlases.
  *
- * <note>This call can fail if Cogl considers the given
- * @internal_format incompatible with the format of its internal
+ * The storage for the texture is not allocated before this function
+ * returns. You can call cogl_texture_allocate() to explicitly
+ * allocate the underlying storage or preferably let Cogl
+ * automatically allocate storage lazily when it may know more about
+ * how the texture is being used and can optimize how it is allocated.
+ *
+ * The texture is still configurable until it has been allocated so
+ * for example you can influence the internal format of the texture
+ * using cogl_texture_set_components() and
+ * cogl_texture_set_premultiplied().
+ *
+ * <note>Allocate call can fail if Cogl considers the internal
+ * format to be incompatible with the format of its internal
  * atlases.</note>
  *
  * <note>The returned #CoglAtlasTexture is a high-level meta-texture
  * with some limitations. See the documentation for #CoglMetaTexture
  * for more details.</note>
  *
- * Return value: (transfer full): A new #CoglAtlasTexture object or
- *          %NULL on failure and @error will be updated.
+ * Returns: (transfer full): A new #CoglAtlasTexture object.
  * Since: 1.16
  * Stability: unstable
  */
 CoglAtlasTexture *
-cogl_atlas_texture_new_from_bitmap (CoglBitmap *bmp,
-                                    CoglPixelFormat internal_format,
-                                    CoglError **error);
+cogl_atlas_texture_new_from_bitmap (CoglBitmap *bmp);
 
 /**
  * cogl_is_atlas_texture:

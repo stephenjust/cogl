@@ -400,14 +400,23 @@ CoglTexture
 cogl_is_texture
 
 <SUBSECTION>
+COGL_TEXTURE_ERROR
+CoglTextureError
+
+<SUBSECTION>
+cogl_texture_allocate
 cogl_texture_get_width
 cogl_texture_get_height
-cogl_texture_get_format
 cogl_texture_is_sliced
 cogl_texture_get_data
 cogl_texture_set_data
 cogl_texture_set_region
 CoglTextureType
+CoglTextureComponents
+cogl_texture_set_components
+cogl_texture_get_components
+cogl_texture_set_premultiplied
+cogl_texture_get_premultiplied
 
 <SUBSECTION Private>
 COGL_TEXTURE_MAX_WASTE
@@ -421,7 +430,7 @@ cogl_texture_2d_new_with_size
 cogl_texture_2d_new_from_file
 cogl_texture_2d_new_from_bitmap
 cogl_texture_2d_new_from_data
-cogl_texture_2d_new_from_foreign
+cogl_texture_2d_gl_new_from_foreign
 cogl_is_texture_rectangle
 </SECTION>
 
@@ -521,7 +530,6 @@ cogl_framebuffer_get_viewport_y
 cogl_framebuffer_get_viewport_width
 cogl_framebuffer_get_viewport_height
 cogl_framebuffer_get_viewport4fv
-cogl_framebuffer_get_color_format
 cogl_framebuffer_get_red_bits
 cogl_framebuffer_get_green_bits
 cogl_framebuffer_get_blue_bits

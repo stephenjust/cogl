@@ -42,6 +42,12 @@ check_flags (TestFlags flags,
       return FALSE;
     }
 
+  if (flags & TEST_REQUIREMENT_TEXTURE_RG &&
+      !cogl_has_feature (test_ctx, COGL_FEATURE_ID_TEXTURE_RG))
+    {
+      return FALSE;
+    }
+
   if (flags & TEST_REQUIREMENT_POINT_SPRITE &&
       !cogl_has_feature (test_ctx, COGL_FEATURE_ID_POINT_SPRITE))
     {
@@ -177,8 +183,7 @@ test_utils_init (TestFlags requirement_flags,
     {
       CoglOffscreen *offscreen;
       CoglTexture2D *tex = cogl_texture_2d_new_with_size (test_ctx,
-                                                          FB_WIDTH, FB_HEIGHT,
-                                                          COGL_PIXEL_FORMAT_ANY);
+                                                          FB_WIDTH, FB_HEIGHT);
       offscreen = cogl_offscreen_new_with_texture (COGL_TEXTURE (tex));
       test_fb = COGL_FRAMEBUFFER (offscreen);
     }
@@ -335,7 +340,6 @@ test_utils_create_color_texture (CoglContext *context,
   tex_2d = cogl_texture_2d_new_from_data (context,
                                           1, 1, /* width/height */
                                           COGL_PIXEL_FORMAT_RGBA_8888_PRE,
-                                          COGL_PIXEL_FORMAT_RGBA_8888_PRE,
                                           4, /* rowstride */
                                           (uint8_t *) &color,
                                           NULL);
@@ -364,7 +368,7 @@ test_utils_texture_new_with_size (CoglContext *ctx,
                                   int width,
                                   int height,
                                   TestUtilsTextureFlags flags,
-                                  CoglPixelFormat internal_format)
+                                  CoglTextureComponents components)
 {
   CoglTexture *tex;
   CoglError *skip_error = NULL;
@@ -375,8 +379,9 @@ test_utils_texture_new_with_size (CoglContext *ctx,
     {
       /* First try creating a fast-path non-sliced texture */
       tex = COGL_TEXTURE (cogl_texture_2d_new_with_size (ctx,
-                                                         width, height,
-                                                         internal_format));
+                                                         width, height));
+
+      cogl_texture_set_components (tex, components);
 
       if (!cogl_texture_allocate (tex, &skip_error))
         {
@@ -397,9 +402,10 @@ test_utils_texture_new_with_size (CoglContext *ctx,
         cogl_texture_2d_sliced_new_with_size (ctx,
                                               width,
                                               height,
-                                              max_waste,
-                                              internal_format);
+                                              max_waste);
       tex = COGL_TEXTURE (tex_2ds);
+
+      cogl_texture_set_components (tex, components);
     }
 
   if (flags & TEST_UTILS_TEXTURE_NO_AUTO_MIPMAP)
@@ -424,7 +430,7 @@ test_utils_texture_new_with_size (CoglContext *ctx,
 CoglTexture *
 test_utils_texture_new_from_bitmap (CoglBitmap *bitmap,
                                     TestUtilsTextureFlags flags,
-                                    CoglPixelFormat internal_format)
+                                    CoglBool premultiplied)
 {
   CoglAtlasTexture *atlas_tex;
   CoglTexture *tex;
@@ -433,15 +439,15 @@ test_utils_texture_new_from_bitmap (CoglBitmap *bitmap,
   if (!flags)
     {
       /* First try putting the texture in the atlas */
-      if ((atlas_tex = cogl_atlas_texture_new_from_bitmap (bitmap,
-                                                           internal_format,
-                                                           &internal_error)) &&
-           cogl_texture_allocate (COGL_TEXTURE (atlas_tex), &internal_error))
-        {
-          return COGL_TEXTURE (atlas_tex);
-        }
+      atlas_tex = cogl_atlas_texture_new_from_bitmap (bitmap);
+
+      cogl_texture_set_premultiplied (COGL_TEXTURE (atlas_tex), premultiplied);
+
+      if (cogl_texture_allocate (COGL_TEXTURE (atlas_tex), &internal_error))
+        return COGL_TEXTURE (atlas_tex);
 
       cogl_error_free (internal_error);
+      cogl_object_unref (atlas_tex);
       internal_error = NULL;
     }
 
@@ -451,9 +457,9 @@ test_utils_texture_new_from_bitmap (CoglBitmap *bitmap,
       (cogl_has_feature (test_ctx, COGL_FEATURE_ID_TEXTURE_NPOT_BASIC) &&
        cogl_has_feature (test_ctx, COGL_FEATURE_ID_TEXTURE_NPOT_MIPMAP)))
     {
-      tex = COGL_TEXTURE (cogl_texture_2d_new_from_bitmap (bitmap,
-                                                           internal_format,
-                                                           &internal_error));
+      tex = COGL_TEXTURE (cogl_texture_2d_new_from_bitmap (bitmap));
+
+      cogl_texture_set_premultiplied (tex, premultiplied);
 
       if (cogl_error_matches (internal_error,
                               COGL_SYSTEM_ERROR,
@@ -478,12 +484,10 @@ test_utils_texture_new_from_bitmap (CoglBitmap *bitmap,
       int max_waste = flags & TEST_UTILS_TEXTURE_NO_SLICING ?
         -1 : COGL_TEXTURE_MAX_WASTE;
       CoglTexture2DSliced *tex_2ds =
-        cogl_texture_2d_sliced_new_from_bitmap (bitmap,
-                                                max_waste,
-                                                internal_format,
-                                                NULL); /* don't catch
-                                                          exceptions */
+        cogl_texture_2d_sliced_new_from_bitmap (bitmap, max_waste);
       tex = COGL_TEXTURE (tex_2ds);
+
+      cogl_texture_set_premultiplied (tex, premultiplied);
     }
 
   if (flags & TEST_UTILS_TEXTURE_NO_AUTO_MIPMAP)
@@ -507,7 +511,6 @@ test_utils_texture_new_from_data (CoglContext *ctx,
                                   int height,
                                   TestUtilsTextureFlags flags,
                                   CoglPixelFormat format,
-                                  CoglPixelFormat internal_format,
                                   int rowstride,
                                   const uint8_t *data)
 {
@@ -524,7 +527,7 @@ test_utils_texture_new_from_data (CoglContext *ctx,
                                   rowstride,
                                   (uint8_t *) data);
 
-  tex = test_utils_texture_new_from_bitmap (bmp, flags, internal_format);
+  tex = test_utils_texture_new_from_bitmap (bmp, flags, TRUE);
 
   cogl_object_unref (bmp);
 
