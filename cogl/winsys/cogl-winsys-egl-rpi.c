@@ -85,10 +85,11 @@ _cogl_winsys_renderer_connect (CoglRenderer *renderer,
   egl_renderer->platform_vtable = &_cogl_winsys_egl_vtable;
 
   egl_renderer->edpy = eglGetDisplay (EGL_DEFAULT_DISPLAY);
-  if (egl_renderer->edpy == EGL_NO_DISPLAY) {
-    printf("Failed to get display\n");
-    goto error;
-  }
+  if (egl_renderer->edpy == EGL_NO_DISPLAY)
+    {
+      printf("Failed to get display\n");
+      goto error;
+    }
 
   if (!eglInitialize (egl_renderer->edpy, 
 		      &egl_renderer->egl_version_major,
@@ -166,10 +167,11 @@ dispman_add_element () {
   VC_RECT_T src_rect;
   VC_RECT_T dst_rect;
 
-  if (dispman_element != DISPMANX_NO_HANDLE) {
-    // Element is already in dispman
-    return TRUE;
-  }
+  if (dispman_element != DISPMANX_NO_HANDLE)
+    {
+      // Element is already in dispman
+      return TRUE;
+    }
 
   dispman_dimensions(&width, &height);
 
@@ -214,35 +216,40 @@ _cogl_winsys_egl_context_created (CoglDisplay *display,
   EGLint err;
 
   // Open screen
-  if (dispman_display == DISPMANX_NO_HANDLE) {
-    dispman_display = vc_dispmanx_display_open(0 /* LCD */);
-  }
-
-  if (!native_window_init) {
-    if (!dispman_add_element()) {
-      error_message = "Failed to add element to dispman";
-      goto fail;
+  if (dispman_display == DISPMANX_NO_HANDLE)
+    {
+      dispman_display = vc_dispmanx_display_open(0 /* LCD */);
     }
 
-    native_window.element = dispman_element;
-    dispman_dimensions((uint32_t *) &native_window.width, (uint32_t *) &native_window.height);
+  if (!native_window_init)
+    {
+      if (!dispman_add_element())
+	{
+	  error_message = "Failed to add element to dispman";
+	  goto fail;
+	}
 
-    native_window_init = TRUE;
-  }
+      native_window.element = dispman_element;
+      dispman_dimensions((uint32_t *) &native_window.width, (uint32_t *) &native_window.height);
+
+      native_window_init = TRUE;
+    }
 
   rpi_display->egl_surface_width = native_window.width;
   rpi_display->egl_surface_height = native_window.height;
 
   // Check EGLConfig
-  if (egl_display->egl_config == NULL) {
-    error_message = "EGLConfig is null!";
-    goto fail;
-  }
+  if (egl_display->egl_config == NULL)
+    {
+      error_message = "EGLConfig is null!";
+      goto fail;
+    }
   // Check edpy
-  if (egl_renderer->edpy == NULL) {
-    error_message = "edpy is null!";
-    goto fail;
-  }
+  if (egl_renderer->edpy == NULL)
+    {
+      error_message = "edpy is null!";
+      goto fail;
+    }
 
   egl_display->egl_surface =
     eglCreateWindowSurface (egl_renderer->edpy,

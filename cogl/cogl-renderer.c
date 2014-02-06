@@ -210,11 +210,11 @@ static CoglWinsysVtableGetter _cogl_winsys_vtable_getters[] =
 #ifdef COGL_HAS_EGL_PLATFORM_ANDROID_SUPPORT
   _cogl_winsys_egl_android_get_vtable,
 #endif
-#ifdef COGL_HAS_EGL_PLATFORM_POWERVR_NULL_SUPPORT
-  _cogl_winsys_egl_null_get_vtable,
-#endif
 #ifdef COGL_HAS_EGL_PLATFORM_RPI_SUPPORT
   _cogl_winsys_egl_rpi_get_vtable,
+#endif
+#ifdef COGL_HAS_EGL_PLATFORM_POWERVR_NULL_SUPPORT
+  _cogl_winsys_egl_null_get_vtable,
 #endif
 #ifdef COGL_HAS_WGL_SUPPORT
   _cogl_winsys_wgl_get_vtable,

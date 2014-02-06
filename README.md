@@ -24,7 +24,6 @@ Using Cogl
 In order to let cogl use this Raspberry Pi backend, you must set some environment variables:
 
 ```
-export COGL_RENDERER=egl_rpi
 export COGL_DRIVER=gles2
 ```
 
