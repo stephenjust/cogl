@@ -315,7 +315,6 @@ _cogl_winsys_egl_onscreen_init (CoglOnscreen *onscreen,
                                 EGLConfig egl_config,
                                 CoglError **error)
 {
-  printf("Rpi: _cogl_winsys_egl_onscreen_init()\n");
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglContext *context = framebuffer->context;
   CoglDisplay *display = context->display;
@@ -340,19 +339,6 @@ _cogl_winsys_egl_onscreen_init (CoglOnscreen *onscreen,
   rpi_display->have_onscreen = TRUE;
 
   return TRUE;
-}
-
-static void
-_cogl_winsys_onscreen_bind (CoglOnscreen *onscreen) {
-  printf("Rpi: _cogl_winsys_onscreen_bind()\n");
-  CoglFramebuffer *fb = COGL_FRAMEBUFFER (onscreen);
-  CoglContext *context = fb->context;
-  CoglDisplayEGL *egl_display = context->display->winsys;
-
-  //CoglBool status = _cogl_winsys_egl_make_current (context->display,
-  //                                                 egl_display->egl_surface,
-  //                                                 egl_display->egl_surface,
-  //                                                 egl_display->egl_context);
 }
 
 static const CoglWinsysEGLVtable
@@ -383,7 +369,6 @@ _cogl_winsys_egl_rpi_get_vtable (void)
 
       vtable.renderer_connect = _cogl_winsys_renderer_connect;
       vtable.renderer_disconnect = _cogl_winsys_renderer_disconnect;
-      //      vtable.onscreen_bind = _cogl_winsys_onscreen_bind;
 
       vtable_inited = TRUE;
     }
